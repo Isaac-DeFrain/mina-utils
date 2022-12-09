@@ -2,7 +2,7 @@
 
 ## Keypair generation
 
-Run all commands from `wallets/scripts`!
+Run all commands from `mina-utils/scripts`!
 
 ### Usage
 
@@ -28,7 +28,7 @@ optional arguments:
 - does not validate private key
 
 ```bash
-python -m mina_gen_keypair
+$ python -m mina_gen_keypair
 ```
 
 ### Supply password length
@@ -37,11 +37,11 @@ python -m mina_gen_keypair
 - does not validate private key
 
 ```bash
-python -m mina_gen_keypair --len LEN
+$ python -m mina_gen_keypair --len LEN
 ```
 
 ### Validate private key
 
 ```bash
-python -m mina_gen_keypair --validate
+$ python -m mina_gen_keypair --validate
 ```
