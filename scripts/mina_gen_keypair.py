@@ -113,6 +113,9 @@ def mina_env(produce_blocks: bool, pwd_fname: str = "0", key_fname: str = "0"):
 
 def check(args: argparse.Namespace):
     # --env and --only-env
+    if args.only_env and (args.env or args.len or args.pubkey or args.validate or args.import_account):
+        print("--only-env can only be used with --pwd-fname, --key-fname, and --produce-blocks")
+        sys.exit(1)
     if args.pwd_fname and not (args.env or args.only_env):
         print("--pwd-fname can only be used with --env or --env-only")
         sys.exit(1)
@@ -138,11 +141,12 @@ if __name__ == "__main__":
     parser.add_argument("--env", action="store_true", help="write .mina-env file")
     parser.add_argument("--only-env", action="store_true", help="only write .mina-env file, do not generate new keypair")
     parser.add_argument("--len", action="store", nargs=1, help="password length (hex digits, LEN >= 64)")
+    parser.add_argument("--pubkey", action="store_true", help="set MINA_PUBLIC_KEY env var")
     parser.add_argument("--validate", action="store_true", help="validate the private key")
     parser.add_argument("--pwd-fname", action="store", nargs=1, help="private key password file name (can only be used with --env and --only-env)")
     parser.add_argument("--key-fname", action="store", nargs=1, help="wallet key file name (can only be used with --env and --only-env)")
-    parser.add_argument("--produce-blocks", action="store_true", help="produce blocks")
-    parser.add_argument("input", action="store", nargs="*")
+    parser.add_argument("--produce-blocks", action="store_true", help="produce blocks with MINA_PUBLIC_KEY")
+    parser.add_argument("--import-account", action="store_true", help="import account")
     args = parser.parse_args()
     check(args)
     if args.only_env:
@@ -162,8 +166,11 @@ if __name__ == "__main__":
             os.system(f"mina-validate-keypair --privkey-path {root_wallet_path}")
         if args.env:
             init_mina_env(args)
+        if args.import_account:
+            os.system(f'mina accounts import --privkey-path {root_wallet_path}')
         os.environ.pop("MINA_PRIVKEY_PASS")
-        os.environ["MINA_PUBLIC_KEY"] = get_pubkey(str(n))
+        if args.pubkey:
+            os.environ["MINA_PUBLIC_KEY"] = get_pubkey(str(n))
         clean_up_wallet_file(wallet_path)
         os.system(f"chmod 600 {SECRETS_DIR}")
         os.system(f"chmod 600 {KEYS_DIR}")

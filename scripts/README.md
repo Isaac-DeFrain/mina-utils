@@ -9,24 +9,23 @@ Python script for generating cryptographically secure passwords, keypairs, and e
 ```sh
 $ python -m mina_gen_keypair --help
 Set your home directory: 
-usage: mina_gen_keypair.py [-h] [--env] [--only-env] [--len LEN] [--validate] [--pwd-fname PWD_FNAME] [--key-fname KEY_FNAME] [--produce-blocks] [input ...]
+usage: mina_gen_keypair.py [-h] [--env] [--only-env] [--len LEN] [--pubkey] [--validate] [--pwd-fname PWD_FNAME] [--key-fname KEY_FNAME] [--produce-blocks] [--import-account]
 
 Mina keypair generator
-
-positional arguments:
-  input
 
 optional arguments:
   -h, --help            show this help message and exit
   --env                 write .mina-env file
   --only-env            only write .mina-env file, do not generate new keypair
   --len LEN             password length (hex digits, LEN >= 64)
+  --pubkey              set MINA_PUBLIC_KEY env var
   --validate            validate the private key
   --pwd-fname PWD_FNAME
                         private key password file name (can only be used with --env and --only-env)
   --key-fname KEY_FNAME
                         wallet key file name (can only be used with --env and --only-env)
-  --produce-blocks      produce blocks
+  --produce-blocks      produce blocks with MINA_PUBLIC_KEY
+  --import-account      import account
 ```
 
 ## [Mina start](./mina_start.sh)
