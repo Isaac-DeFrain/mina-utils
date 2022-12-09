@@ -6,8 +6,8 @@ from os import environ, listdir, system
 from argparse import ArgumentParser
 
 SECRETS = Path(__file__).parent.parent / "secrets"
-ENV_DIR = Path("~/.mina_env")
-KEYS_DIR = Path("~/.mina_keys")
+ENV_DIR = Path("~/.mina-env")
+KEYS_DIR = Path("~/.mina-keys")
 
 def new_wallet_file(wallet_fname: str) -> int:
     return int(wallet_fname.split(".")[0][0])
@@ -64,11 +64,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     mkdir(SECRETS)
     mkdir(KEYS_DIR)
+    system(f"chmod 700 {SECRETS}")
+    system(f"chmod 700 {KEYS_DIR}")
     wallet_files = list(filter(is_wallet, listdir(SECRETS)))
     n = 1 + max([new_wallet_file(wname) for wname in wallet_files]) if wallet_files else 0
-    system(f"chmod 700 {KEYS_DIR}")
     root_wallet_path, wallet_path = gen_mina_wallet_paths(n)
     pwd = gen_pwd(n, int(args.len[0])) if args.len else gen_pwd(n)
+    # use env var for password
     environ["MINA_PRIVKEY_PASS"] = pwd
     system(f"mina-generate-keypair --privkey-path {root_wallet_path} > {wallet_path}")
     if args.validate:
