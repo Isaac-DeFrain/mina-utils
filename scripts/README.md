@@ -1,47 +1,31 @@
 # Mina scripts
 
-## Keypair generation
+Run all commands from here (`mina-utils/scripts`)
 
-Run all commands from `mina-utils/scripts`!
+## [Mina keypair generation](./mina_gen_keypair.py)
 
-### Usage
+Python script for generating cryptographically secure passwords, keypairs, and env file for mina
 
-```bash
-$ cd scripts
+```sh
 $ python -m mina_gen_keypair --help
-usage: mina_gen_keypair.py [-h] [--len LEN] [--validate] [input ...]
+usage: mina_gen_keypair.py [-h] [--env] [--len LEN] [--validate] [input ...]
 
-mina wallet password generator
+Mina keypair generator
 
 positional arguments:
   input
 
 optional arguments:
   -h, --help  show this help message and exit
-  --len LEN   password length (number of hex digits, must be >= 64)
+  --env       write .mina-env file
+  --len LEN   password length (hex digits, LEN >= 64)
   --validate  validate the private key
 ```
 
-### Basic usage
+## [Mina start](./mina_start.sh)
 
-- generates 64 hex digit password
-- does not validate private key
+Start a mina node instance
 
-```bash
-$ python -m mina_gen_keypair
-```
-
-### Supply password length
-
-- `LEN >= 64` or 64 will be used by default
-- does not validate private key
-
-```bash
-$ python -m mina_gen_keypair --len LEN
-```
-
-### Validate private key
-
-```bash
-$ python -m mina_gen_keypair --validate
+```sh
+sh ./mina_start.sh
 ```
