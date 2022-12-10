@@ -30,4 +30,6 @@ def write(fpath: pathlib.Path, contents: str = ""):
         mkdir_rec(fpath.parent)
     if not fpath.exists():
         os.system(f"touch {fpath}")
+    else:
+        os.unlink(str(fpath))
     fpath.write_text(contents)

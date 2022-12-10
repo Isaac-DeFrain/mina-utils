@@ -7,8 +7,7 @@ import file_ops
 
 PathPair = tuple[pathlib.Path, pathlib.Path]
 
-HOME_DIR = pathlib.Path(input("Set your home directory: "))
-
+HOME_DIR = pathlib.Path.home()
 SECRETS_DIR = pathlib.Path(__file__).parent.parent / "secrets"
 KEYS_DIR = HOME_DIR / ".mina-keys"
 ENV_PATH = HOME_DIR / ".mina-env" # this is a file
@@ -62,7 +61,7 @@ def clean_up_wallet_file(wpath: pathlib.Path):
         f.close()
     file_ops.write(wpath, lines[-2] + lines[-1])
 
-def get_pubkey(key_name: str) -> str:
+def get_pubkey(key_name: str = "0") -> str:
     wallet_path = SECRETS_DIR / f"{key_name}.wallet"
     with wallet_path.open("r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -72,7 +71,7 @@ def get_pubkey(key_name: str) -> str:
 ##### mina env #####
 
 def env_template(
-        produce_blocks: bool,
+        no_produce_blocks: bool,
         pwd: str,
         wallet_key_path: pathlib.Path,
         log_level: str = "Info",
@@ -83,7 +82,8 @@ def env_template(
 
     Sets `MINA_PRIVKEY_PASS`, `LOG_LEVEL`, `FILE_LOG_LEVEL`, `EXTRA_FLAGS`, `PEER_LIST_URL`
     '''
-    if produce_blocks:
+    if not no_produce_blocks:
+        # block production
         env_contents = f'''\
 MINA_PRIVKEY_PASS="{pwd}"
 LOG_LEVEL={log_level}
@@ -92,10 +92,11 @@ EXTRA_FLAGS=" --block-producer-key {wallet_key_path}"
 PEER_LIST_URL={peer_list_url}
 '''
     else:
+        # only connect to peers, no block production
         env_contents = f'PEER_LIST_URL={peer_list_url}\n'
     return env_contents
 
-def mina_env(produce_blocks: bool, pwd_fname: str = "0", key_fname: str = "0"):
+def mina_env(no_produce_blocks: bool, pwd_fname: str = "0", key_fname: str = "0"):
     '''
     Mina env template
 
@@ -107,14 +108,14 @@ def mina_env(produce_blocks: bool, pwd_fname: str = "0", key_fname: str = "0"):
         print(f"Error: the provided password ({pwd_path}) does not exist. Exiting...")
         sys.exit(1)
     pwd = file_ops.read(pwd_path)
-    file_ops.write(ENV_PATH, env_template(produce_blocks, pwd, key_path))
+    file_ops.write(ENV_PATH, env_template(no_produce_blocks, pwd, key_path))
 
 ##### parser #####
 
 def check(args: argparse.Namespace):
     # --env and --only-env
-    if args.only_env and (args.env or args.len or args.pubkey or args.validate or args.import_account):
-        print("--only-env can only be used with --pwd-fname, --key-fname, and --produce-blocks")
+    if args.only_env and (args.env or args.len or args.validate or args.import_account):
+        print("--only-env can only be used with --pwd-fname, --key-fname, --produce-blocks, --pubkey")
         sys.exit(1)
     if args.pwd_fname and not (args.env or args.only_env):
         print("--pwd-fname can only be used with --env or --env-only")
@@ -122,19 +123,19 @@ def check(args: argparse.Namespace):
     if args.key_fname and not (args.env or args.only_env):
         print("--key-fname can only be used with --env or --env-only")
         sys.exit(1)
-    if args.produce_blocks and not (args.env or args.only_env):
-        print("--produce-blocks can only be used with --env or --env-only")
+    if args.no_produce_blocks and not (args.env or args.only_env):
+        print("--no-produce-blocks can only be used with --env or --env-only")
         sys.exit(1)
 
 def init_mina_env(args: argparse.Namespace):
     if args.pwd_fname and args.key_fname:
-        mina_env(args.produce_blocks, args.pwd_fname[0], args.key_fname[0])
+        mina_env(args.no_produce_blocks, args.pwd_fname[0], args.key_fname[0])
     elif args.pwd_fname:
-        mina_env(args.produce_blocks, pwd_fname=args.pwd_fname[0])
+        mina_env(args.no_produce_blocks, pwd_fname=args.pwd_fname[0])
     elif args.key_fname:
-        mina_env(args.produce_blocks, key_fname=args.key_fname[0])
+        mina_env(args.no_produce_blocks, key_fname=args.key_fname[0])
     else:
-        mina_env(args.produce_blocks)
+        mina_env(args.no_produce_blocks)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Mina keypair generator")
@@ -145,15 +146,22 @@ if __name__ == "__main__":
     parser.add_argument("--validate", action="store_true", help="validate the private key")
     parser.add_argument("--pwd-fname", action="store", nargs=1, help="private key password file name (can only be used with --env and --only-env)")
     parser.add_argument("--key-fname", action="store", nargs=1, help="wallet key file name (can only be used with --env and --only-env)")
-    parser.add_argument("--produce-blocks", action="store_true", help="produce blocks with MINA_PUBLIC_KEY")
+    parser.add_argument("--no-produce-blocks", action="store_true", help="do not produce blocks with MINA_PUBLIC_KEY, only connect to peers")
     parser.add_argument("--import-account", action="store_true", help="import account")
     args = parser.parse_args()
     check(args)
     if args.only_env:
+        print("Generating only mina env -- no keypair will be generated")
         init_mina_env(args)
+        if args.pubkey:
+            pubkey = get_pubkey()
+            print(f"Setting MINA_PUBLIC_KEY={pubkey}")
+            os.system(f'export MINA_PUBLIC_KEY="{pubkey}"')
     else:
         file_ops.mkdir(SECRETS_DIR)
         file_ops.mkdir(KEYS_DIR)
+        print(f"Changing {SECRETS_DIR} permissions to 700")
+        print(f"Changing {KEYS_DIR} permissions to 700")
         os.system(f"chmod 700 {SECRETS_DIR}")
         os.system(f"chmod 700 {KEYS_DIR}")
         wallet_files = list(filter(is_wallet, os.listdir(SECRETS_DIR)))
@@ -163,14 +171,21 @@ if __name__ == "__main__":
         os.environ["MINA_PRIVKEY_PASS"] = pwd
         os.system(f"mina-generate-keypair --privkey-path {root_wallet_path} > {wallet_path}")
         if args.validate:
+            print(f"Validating keypair at {root_wallet_path}")
             os.system(f"mina-validate-keypair --privkey-path {root_wallet_path}")
         if args.env:
+            print("Generating mina env")
             init_mina_env(args)
         if args.import_account:
+            print(f"Importing account from {root_wallet_path}")
             os.system(f'mina accounts import --privkey-path {root_wallet_path}')
         os.environ.pop("MINA_PRIVKEY_PASS")
         if args.pubkey:
-            os.environ["MINA_PUBLIC_KEY"] = get_pubkey(str(n))
-        clean_up_wallet_file(wallet_path)
+            pubkey = get_pubkey(str(n))
+            print(f"Setting MINA_PUBLIC_KEY={pubkey}")
+            os.system(f'export MINA_PUBLIC_KEY="{pubkey}"')
+            clean_up_wallet_file(wallet_path)
+        print(f"Changing {SECRETS_DIR} permissions to 600")
+        print(f"Changing {KEYS_DIR} permissions to 600")
         os.system(f"chmod 600 {SECRETS_DIR}")
         os.system(f"chmod 600 {KEYS_DIR}")
