@@ -33,7 +33,7 @@ You may need to configure your router's port forwarding to allow inbound traffic
 - `8302/tcp`
 - Optionally to use the GraphQL service, expose `3085/tcp`
 
-See [firewall commands](./general_linux_commands.md#firewall) for more details
+See [firewall commands](./helpful_commands.md#firewall) for more details
 
 ## [Generate keypair](https://docs.minaprotocol.com/node-operators/generating-a-keypair)
 
@@ -120,6 +120,8 @@ EXTRA_FLAGS=" --block-producer-key <BLOCK_PRODUCER_KEY_PATH>"
 PEER_LIST_URL=https://storage.googleapis.com/mina-seed-lists/mainnet_seeds.tx
 ```
 
+Alternatively, you can supply the python script with `--env` or `--only-env` to generate this file
+
 If you only want your node to connect to peers and **produce no blocks** do
 
 ```sh
@@ -127,9 +129,17 @@ If you only want your node to connect to peers and **produce no blocks** do
 PEER_LIST_URL=https://storage.googleapis.com/mina-seed-lists/mainnet_seeds.tx
 ```
 
-Alternatively, you can supply the python script with `--env` or `--only-env` to generate this file
+Alternatively, you can supply the python script with `--env` or `--only-env` and `--no-produce-blocks` to generate this file
 
-[Start](../scripts/mina_start.sh) mina node instance
+*Note*: make sure mina node is not already running
+
+```sh
+systemctl --user status mina
+# if running do
+systemctl --user stop mina
+```
+
+Then [start](../scripts/mina_start.sh) mina node instance
 
 ```sh
 systemctl --user daemon-reload
@@ -205,106 +215,9 @@ Addresses and ports:
 	Client port:    8301
 ```
 
-## [Sending a payment](https://docs.minaprotocol.com/node-operators/sending-a-payment#using-a-connected-node)
+🎉 Congratulations, you now have a live mina node! 🎉
 
-Import local account
+Next steps
 
-```sh
-chmod 700 ~/.mina-keys
-mina accounts --privkey-path ~/.mina-keys/<YOUR_WALLET_NAME>
-chmod 600 ~/.mina-keys
-# should get something like the following:
-# 😄 Imported account!
-# Public key: B62qpP7yjM4F6XFk9vgq87r8W8s8BER7RYShMnKgadWrb4Gmr58FWNL
-```
-
-Alternatively, you can supply the python script with `--import-account`
-
-Create local account
-
-```sh
-mina accounts create
-```
-
-Check your balance(s)
-
-```sh
-mina accounts list
-```
-
-Unlock your account and make a payment
-
-```sh
-mina accounts unlock --public-key $MINA_PUBLIC_KEY
-mina client send-payment \
-  --amount 1.5 \
-  --receiver $MINA_PUBLIC_KEY \
-  --fee 0.1 \
-  --sender $MINA_PUBLIC_KEY
-```
-
-### TODO [Advanced transactions](https://docs.minaprotocol.com/node-operators/sending-a-payment#advanced)
-
-## [Staking and snarking](https://docs.minaprotocol.com/node-operators/staking-and-snarking)
-
-**TODO no `set-staking` client subcommand**
-
-To delegate stake do
-
-```sh
-mina account unlock --public-key $MINA_PUBLIC_KEY
-mina client delegate-stake \
-    --receiver <DELEGATE-PUBLIC-KEY> \
-    --sender $MINA_PUBLIC_KEY \
-    --fee 0.1
-```
-
-*Note*: there is a latency period of 2-4 weeks before new stake delegation goes into effect
-
-To set snark worker do
-
-```sh
-mina client set-snark-work-fee <FEE>
-mina client set-snark-worker --address $MINA_PUBLIC_KEY
-```
-
-Confirm it worked
-
-```sh
-mina client status
-# the SNARK worker field should now be <MINA_PUBLIC_KEY>
-```
-
-### Using `daemon.json` to configure mina daemon
-
-Create the file
-
-```sh
-touch ~/.mina-config/daemon.config
-```
-
-Example `daemon.json` file
-
-```
-{
-  "daemon": {
-    "client-port": 1000,
-    "external-port": 1001,
-    "rest-port": 1002,
-    "block-producer-key": "/path/to/privkey-file",
-    "block-producer-password": "mypassword",
-    "block-producer-pubkey": "<MY PUBLICKEY>",
-    "coinbase-receiver": "<MY PUBLICKEY>",
-    "log-block-creation": false,
-    "log-received-blocks": false,
-    "log-snark-work-gossip": false,
-    "log-txn-pool-gossip": false,
-    "peers": ["seed-one.o1test.net", "seed-two.o1test.net"],
-    "run-snark-worker": "<MY PUBLICKEY>",
-    "snark-worker-fee": 10,
-    "snark-worker-parallelism": 1,
-    "work-reassignment-wait": 420000,
-    "work-selection": "seq"
-  }
-}
-```
+- [send a payment](./sending_a_payment.md)
+- [stake, delegate, and snark](./delegate_and_snark.md)
