@@ -18,12 +18,16 @@ mina client delegate-stake \
 
 *Note*: there is a latency period of 2-4 weeks before new stake delegations go into effect
 
+## [Snark](https://docs.minaprotocol.com/node-operators/staking-and-snarking#compressing-data-in-the-mina-network)
+
 To set snark worker do
 
 ```sh
 mina client set-snark-work-fee <FEE>
 mina client set-snark-worker --address $MINA_PUBLIC_KEY
 ```
+
+Alternatively, you can use [`mina_snark`](../scripts/mina_snark.sh)
 
 Confirm it worked
 
