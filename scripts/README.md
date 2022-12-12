@@ -35,10 +35,36 @@ Start a mina node instance
 sh ./mina_start.sh
 ```
 
-## [Mina snark](./mina_snark.sh)
+## [Mina snark](./mina_snark.py)
 
-Set the snark worker for a mina node
+Set the snark worker and fee for a mina node
 
 ```sh
-sh ./mina_snark.sh
+$ python -m mina_snark --help
+usage: mina_snark.py [-h] [--pubkey PUBKEY] [--fee FEE]
+
+Mina snark worker util
+
+optional arguments:
+  -h, --help       show this help message and exit
+  --pubkey PUBKEY  set the snark worker public key
+  --fee FEE        set the snark worker fee
+```
+
+## [Mina archive run](./mina_archive_run.sh)
+
+You must have a PostgreSQL db `archive` and a server listening on port `5432`
+
+Start a mina archive node instance and connect to the `archive` db with `--server-port 3086`
+
+```sh
+sh ./mina_archive_run.sh
+```
+
+## [Mina archive daemon](./mina_archive_daemon.sh)
+
+Start a mina daemon with `--server-port 3086`
+
+```sh
+sh ./mina_archive_daemon.sh
 ```
