@@ -55,7 +55,7 @@ optional arguments:
 
 You must have a PostgreSQL db `archive` and a server listening on port `5432`
 
-Start a mina archive node instance and connect to the `archive` db with `--server-port 3086`
+Start a mina archive node instance with `postgres` user and connect to the `archive` db with `--server-port 3086`
 
 ```sh
 sh ./mina_archive_run.sh
@@ -68,3 +68,7 @@ Start a mina daemon with `--server-port 3086`
 ```sh
 sh ./mina_archive_daemon.sh
 ```
+
+## [`postgres` user scripts](./postgres_scripts/)
+
+Sets up the `postgres` user for an archive node
