@@ -210,7 +210,7 @@ Consensus configuration:
 Addresses and ports:                           
 	External IP:    <EXTERNAL_IP>
 	Bind IP:        0.0.0.0
-	Libp2p PeerID:  12D3KooWAve5312B5XbFM6UtLxLa1AM2zT2XFsgEJfpUPKrBfN7w
+	Libp2p PeerID:  <LIBP2P_PEER_ID>
 	Libp2p port:    8302
 	Client port:    8301
 ```

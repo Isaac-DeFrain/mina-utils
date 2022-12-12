@@ -44,7 +44,11 @@ Mina node uses
 Show status of all services
 
 ```sh
+# less detail
 service --status-all
+
+# more detail
+systemctl --user status
 ```
 
 [Start](../scripts/mina_start.sh) a `mina` node instance

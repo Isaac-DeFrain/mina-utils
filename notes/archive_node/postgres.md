@@ -1,10 +1,21 @@
-# Working with Postgres
+# Postgres
+
+## Running an archive node (after initial setup)
+
+After completing the intial setup, to get an archive node running
+
+- `postgres` user starts the PostgreSQL server `postgres -p 5432 -D /usr/local/var/postgres`
+- `postgres` user does `mina_archive_run`
+- then `mina_archive_daemon`
+
 
 ## Install from source
 
+Follow [instructions](https://www.postgresql.org/docs/current/installation.html) to install from source
+
 ### Install dependencies
 
-Before building PostgreSQL from source, you will need to install some dependencies. You can do this with the following command:
+Before building PostgreSQL from source, you need to install some dependencies
 
 ```sh
 sudo apt-get install build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev
@@ -12,7 +23,7 @@ sudo apt-get install build-essential libreadline-dev zlib1g-dev flex bison libxm
 
 ### Download source
 
-Download the [source code](https://www.postgresql.org/ftp/source/) from the PostgreSQL website. Once you have the file, extract it with the following command:
+Download the [source code](https://www.postgresql.org/ftp/source/) from the PostgreSQL website. Once you have the file, extract it
 
 ```sh
 tar xvfz postgresql-VERSION.tar.gz
@@ -20,7 +31,7 @@ tar xvfz postgresql-VERSION.tar.gz
 
 ### Configure and build
 
-Once the source code is extracted, you can configure and build it with the following commands:
+Once the source code is extracted, you can configure and build it with the following commands
 
 ```sh
 cd postgresql-VERSION
@@ -30,13 +41,13 @@ make
 
 ### Install
 
-Once the build is complete, you can install PostgreSQL with the following command:
+Once the build is complete, you can install PostgreSQL with the following command
 
 ```sh
 sudo make install
 ```
 
-### Add `postgres` user and add env vars
+#### Add `postgres` user
 
 Add user and set password
 
@@ -45,7 +56,7 @@ adduser postgres
 sudo passwd postgres
 ```
 
-Switch to `postgres` user and add env vars
+#### Switch to `postgres` user and add env vars
 
 ```sh
 su - postgres
@@ -65,28 +76,60 @@ MANPATH=/usr/local/pgsql/share/man:$MANPATH
 export MANPATH
 ```
 
-Save `~/.bashrc` and refresh `source ~/.bashrc`
-
-### Initialize the db
-
-Once PostgreSQL is installed, you can initialize the database with the following command:
+Save and refresh
 
 ```sh
-initdb -D /usr/local/pgsql/data
+source ~/.bashrc
+```
+
+(if env vars are not set, then you must use fully qualified commands `/usr/local/pgsql/bin/COMMAND`)
+
+### Initialize db and start Postgres server
+
+Once PostgreSQL is installed, initialize the database
+
+```sh
+initdb -D /usr/local/var/postgres
 ```
 
 You can now start the PostgreSQL server
 
-(make sure no other postgres instances are running, see [postgres](./../helpful_commands.md#postgresql))
-
 ```sh
-postgres -D /usr/local/pgsql/data >logfile 2>&1 &
+postgres -p 5432 -D /usr/local/var/postgres
 ```
 
-(if env vars have not been set in `~/.bashrc`, then use fully qualified command `/usr/local/pgsql/bin/COMMAND`)
+(make sure no other postgres instances are running, see [postgres](./../helpful_commands.md#postgresql), otherwise you will most likely get postmaster errors)
 
-Follow [instructions](https://www.postgresql.org/docs/current/installation.html) to build from source
+Only on the first time setting up the archive node, you need to create the `archive` db
 
-### Config loc
+```sh
+createdb -h localhost -p 5432 -e archive
+psql -h localhost -p 5432 -d archive \
+  -f <(curl -Ls https://raw.githubusercontent.com/MinaProtocol/mina/master/src/app/archive/create_schema.sql)
+```
+
+Start the archive process on port `3086` with the `postgres` user
+
+```sh
+mina-archive run \
+  --postgre-uri postgres://localhost:5432/archive \
+  --server-port 3086
+```
+
+Alternatively, `postgres` can run [`mina_archive_run`](../../scripts/mina_archive_run.sh)
+
+Finally, open another terminal and start the daemon, connecting it to the archive process on port `3086`
+
+```sh
+mina daemon \
+  --peer-list-url https://storage.googleapis.com/mina-seed-lists/mainnet_seeds.txt \
+  --archive-address 3086
+```
+
+Alternatively, you can run [`mina_archive_daemon`](../../scripts/mina_archive_daemon.sh)
+
+You can also connect to an archive process on another machine by specifying a hostname in `--archive-address`, e.g. `localhost:3086`
+
+### Config
 
 `postgresql.conf` is located in `/etc/postgresql/VERSION/main/`
