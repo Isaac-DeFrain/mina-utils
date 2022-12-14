@@ -170,6 +170,7 @@ if __name__ == "__main__":
         pwd = gen_pwd(str(n), int(args.len[0])) if args.len else gen_pwd(str(n))
         os.environ["MINA_PRIVKEY_PASS"] = pwd
         os.system(f"mina-generate-keypair --privkey-path {root_wallet_path} > {wallet_path}")
+        clean_up_wallet_file(wallet_path)
         if args.validate:
             print(f"Validating keypair at {root_wallet_path}")
             os.system(f"mina-validate-keypair --privkey-path {root_wallet_path}")
@@ -184,7 +185,6 @@ if __name__ == "__main__":
             pubkey = get_pubkey(str(n))
             print(f"Setting MINA_PUBLIC_KEY={pubkey}")
             os.system(f'export MINA_PUBLIC_KEY="{pubkey}"')
-            clean_up_wallet_file(wallet_path)
         print(f"Changing {SECRETS_DIR} permissions to 600")
         print(f"Changing {KEYS_DIR} permissions to 600")
         os.system(f"chmod 600 {SECRETS_DIR}")
