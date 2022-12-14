@@ -13,6 +13,11 @@ git clone https://github.com/MinaProtocol/mina
 ```sh
 echo "deb [trusted=yes] http://packages.o1test.net $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/mina.list
 sudo apt-get update
+```
+
+Get `mina-mainnet`
+
+```sh
 sudo apt-get install -y curl unzip mina-mainnet=1.3.1.2-25388a0
 ```
 
@@ -22,7 +27,7 @@ Check it works
 mina version
 ```
 
-Should get something like `Commit 9b0369c27bb85c8ab2f8725c6e977eb27b53b826 on branch master`
+Should get `Commit 25388a0fed9695e8e9d04f75f50c2bae1c9c80db on branch master`
 
 ## Set up port forwarding and allow in firewall
 
@@ -52,10 +57,10 @@ sudo apt-get install mina-generate-keypair=1.3.0-9b0369c
 Check it works
 
 ```sh
-mina generate-keypair -version
+mina-generate-keypair -version
 ```
 
-Should get something like `Commit 9b0369c27bb85c8ab2f8725c6e977eb27b53b826 on branch master`
+Should get `Commit 9b0369c27bb85c8ab2f8725c6e977eb27b53b826 on branch master`
 
 ### Usage
 
@@ -100,11 +105,10 @@ The Auro Firefox extension does not currently support Ledger
 
 ## [Connecting to Mainnet](https://docs.minaprotocol.com/node-operators/connecting-to-the-network)
 
-Assuming you've [installed the `stable` package repos](./running_a_node.md#set-up-the-stable-package-repos) do
+Assuming you've [installed the `stable` package repos](./running_a_node.md#set-up-the-stable-package-repos) and `mina-mainnet` do
 
 ```sh
 sudo apt-get install --yes apt-transport-https
-sudo apt-get install --yes curl unzip mina-mainnet=1.3.1.2-25388a0
 ```
 
 Create `.mina-env` file

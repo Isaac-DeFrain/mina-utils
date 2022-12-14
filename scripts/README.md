@@ -7,7 +7,7 @@ Run all commands from here (`mina-utils/scripts`)
 Python script for generating cryptographically secure passwords, keypairs, and env file for mina
 
 ```sh
-$ python -m mina_gen_keypair --help
+$ python3 -m mina_gen_keypair --help
 usage: mina_gen_keypair.py [-h] [--env] [--only-env] [--len LEN] [--pubkey] [--validate] [--pwd-fname PWD_FNAME] [--key-fname KEY_FNAME] [--no-produce-blocks] [--import-account]
 
 Mina keypair generator
@@ -40,7 +40,7 @@ sh ./mina_start.sh
 Set the snark worker and fee for a mina node
 
 ```sh
-$ python -m mina_snark --help
+$ python3 -m mina_snark --help
 usage: mina_snark.py [-h] [--pubkey PUBKEY] [--fee FEE]
 
 Mina snark worker util
