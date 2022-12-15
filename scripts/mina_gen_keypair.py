@@ -5,8 +5,6 @@ import secrets
 import argparse
 import file_ops
 
-PathPair = tuple[pathlib.Path, pathlib.Path]
-
 HOME_DIR = pathlib.Path.home()
 SECRETS_DIR = pathlib.Path(__file__).parent.parent / "secrets"
 KEYS_DIR = HOME_DIR / ".mina-keys"
@@ -28,7 +26,7 @@ def is_wallet(fname: str) -> bool:
         res = False
     return res
 
-def new_pwd_and_wallet_paths(n: int) -> PathPair:
+def new_pwd_and_wallet_paths(n: int) -> "tuple[pathlib.Path, pathlib.Path]":
     '''
     Returns (`pwd_path`, `wallet_path`)
     '''
@@ -46,7 +44,7 @@ def gen_pwd(pwd_file: str, length: int = 64) -> str:
         file_ops.write(pwd_path, pwd)
     return pwd
 
-def gen_mina_wallet_paths(n: int) -> PathPair:
+def gen_mina_wallet_paths(n: int) -> "tuple[pathlib.Path, pathlib.Path]":
     '''
     Returns (`root_wallet_path`, `local_wallet_path`)
     '''
