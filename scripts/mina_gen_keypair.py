@@ -74,7 +74,7 @@ def env_template(
         wallet_key_path: pathlib.Path,
         log_level: str = "Info",
         file_log_level: str = "Debug",
-        peer_list_url: str = "https://storage.googleapis.com/mina-seed-lists/mainnet_seeds.txt") -> str:
+        peer_list_url: str = "https://api.ipfsbrowser.com/ipfs/get.php?hash=QmVpGhL5qr56KFfSZPyivH9Zsx5ppNUREWH4RAuq3HeoSL") -> str:
     '''
     Mina env template
 
