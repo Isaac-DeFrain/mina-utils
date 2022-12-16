@@ -1,5 +1,7 @@
 # [IPFS](https://ipfs.io)
 
+## [Docker run](https://docs.ipfs.tech/how-to/run-ipfs-inside-docker/)
+
 ## Install
 
 Follow [install instructions](https://docs.ipfs.tech/install/) or do
@@ -68,7 +70,36 @@ IPFS has a name service:
 - can map DNS, .onion, .bit, etc to IPNS
 ```
 
-## Querying data
+## Exploring
+
+### [IPLD](https://ipld.io/)
+
+Interplanetary Linked Data
+
+- [IPLD docs](https://ipld.io/docs/)
+- [IPLD explorer](https://explore.ipld.io/#/explore/)
+  - [Visualize content links](https://explore.ipld.io/#/explore/QmQPeNsJPyVWPFDVHb77w8G42Fvo15z4bG2X8D2GhfbSXc)
+
+![](./ipfs_content_links.png)
+
+### `ipfs ls`
+
+```sh
+$ ipfs ls /ipfs/QmQPeNsJPyVWPFDVHb77w8G42Fvo15z4bG2X8D2GhfbSXc
+QmQy6xmJhrcC5QLboAcGFcAE1tC8CrwDVkrHdEYJkLscrQ 1681 about
+QmYCvbfNbCwFR45HiNP45rwJgvatpiW38D961L5qAhUM5Y 189  contact
+QmU5k7ter3RdjZXu3sHghsga1UQtrztnQxmTL22nPnsu3g 311  help
+QmejvEPop4D7YUadeGqYWmZxHhLc4JBUCzJJHWMzdcMe2y 4    ping
+QmQGiYLVAdSHJQKYFRTJZMG4BXBHqKperaZtyKGmCRLmsF 1681 quick-start
+QmPZ9gcCEpqKTo6aq61g2nXGUhM4iCL3ewB6LDXZCtioEB 1091 readme
+QmQ5vhrL7uv6tuoN9KeVBwd4PwfQkXdVVmDLUZuTNxqgvm 1162 security-notes
+```
+
+### `ipfs get`
+
+```sh
+ipfs get /ipfs/QmQPeNsJPyVWPFDVHb77w8G42Fvo15z4bG2X8D2GhfbSXc/readme
+```
 
 ### [IPFS browser](https://ipfsbrowser.com/) API
 
@@ -80,8 +111,9 @@ curl "https://api.ipfsbrowser.com/ipfs/get.php?hash=QmVpGhL5qr56KFfSZPyivH9Zsx5p
 
 ### [Http gateway](https://docs.ipfs.tech/reference/http/gateway/#api)
 
-If you are running an ipfs node, you can do
+No ipfs node required
 
 ```sh
-curl "https://localhost:8080/ipfs/QmVpGhL5qr56KFfSZPyivH9Zsx5ppNUREWH4RAuq3HeoSL"
+curl "http://127.0.0.1:8080/ipfs/bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi" > creepy_cat.jpg
+"
 ```
