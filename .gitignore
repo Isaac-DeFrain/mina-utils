@@ -2,3 +2,5 @@ __pycache__
 secrets
 _build
 mina_block
+mina-explorer-data
+voting_service_key.json
