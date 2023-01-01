@@ -1,4 +1,8 @@
+.vscode
 __pycache__
 secrets
 _build
 mina_block
+voting-data
+voting_service_key.json
+voting_github_auth_token
