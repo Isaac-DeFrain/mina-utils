@@ -4,20 +4,23 @@ Conversion between different time units for the Mina Protocol
 ISO-8601 <-> epochs <-> slots <-> ms ticks
 '''
 
+import json
 import argparse
 from datetime import datetime
 
-# an epoch lasts 14 days, 21 hours
-# each slot lasts 3 minutes (180_000 ms)
-# 1 month ~ 2 epochs
+# Notes on epochs
+# - 1 month ~ 2 epochs
+# - an epoch lasts 14 days, 21 hours
+# - each slot lasts 3 minutes (180_000 ms)
 
 SLOTS_PER_EPOCH = 7140
 TICKS_PER_SLOT  = 180_000
 TICKS_PER_EPOCH = TICKS_PER_SLOT * SLOTS_PER_EPOCH
+GENESIS_TICKS   = 1615935600000
 
 def iso8601_to_datetime(iso: str):
     '''
-    Parse ISO-8601 date/time string to datetime object
+    Parse ISO-8601 DateTime string to datetime object
 
     Note: this function depends on machine's local timezone. Adjust accordingly!
     '''
@@ -25,69 +28,65 @@ def iso8601_to_datetime(iso: str):
 
 # convert everything to ms
 
-def iso_to_ms(iso: str):
+def iso_to_ms(iso: str) -> int:
     """
     Converts ISO-8601 DateTime to ms
 
     Note: `iso8601_to_datetime` uses local timezone. Adjust accordingly!
 
-    >>> # epoch 42
-    >>> dt42_start = iso8601_to_datetime('2022-12-01T13:00:00Z') # UTC-5
-    >>> dt42_end   = iso8601_to_datetime('2022-12-16T09:59:59Z') # UTC-5
-    >>> # epoch 43
-    >>> dt43_start = iso8601_to_datetime('2022-12-16T10:00:00Z') # UTC-5
-    >>> dt43_end   = iso8601_to_datetime('2022-12-31T06:59:59Z') # UTC-5
-    >>> assert True
+    >>> gen_start = iso_to_ms("2021-03-16T19:00:00Z")
+    >>> gen_start = GENESIS_TICKS
     """
     dt = iso8601_to_datetime(iso)
+    # convert to ms
     return int(dt.timestamp() * 1000)
 
-def epoch_slot_to_ms(epoch_slot) -> int:
+def epoch_slot_to_ms(epoch_slot: "tuple[int, int]") -> int:
     '''
     Converts Mina `(epoch, slot)` to time (ms)
     '''
     epoch = epoch_slot[0]
     slot = epoch_slot[1]
-    return genesis_ticks + epoch * TICKS_PER_EPOCH + slot * TICKS_PER_SLOT
+    return GENESIS_TICKS + epoch * TICKS_PER_EPOCH + slot * TICKS_PER_SLOT
 
-def gslot_to_ms(gslot):
+def gslot_to_ms(gslot: int) -> int:
     '''
     Converts global Mina slot to time (ms)
     '''
-    gslot = gslot[0]
-    return int(genesis_ticks + gslot * TICKS_PER_SLOT)
+    return int(GENESIS_TICKS + gslot * TICKS_PER_SLOT)
 
 # convert ms to everything
 
-genesis_ticks = iso_to_ms('2021-03-17T00:00:00Z')
-
-def ms_to_iso(ticks):
+def ms_to_iso(ticks: int):
     '''
     Converts time (ms) to ISO-8601 DateTime
     '''
-    dt = datetime.fromtimestamp(ticks)
+    # convert back from ms
+    dt = datetime.fromtimestamp(ticks // 1000)
     return dt.isoformat()
 
-def ms_to_epoch(ticks):
+def ms_to_epoch(ticks: int):
     '''
     Converts time (ms) to Mina `(epoch, slot)`
     '''
+    epoch = (ticks - GENESIS_TICKS) // TICKS_PER_EPOCH
+    rem_ticks = ticks - GENESIS_TICKS - epoch * TICKS_PER_EPOCH
     return (
-        (ticks - genesis_ticks) // TICKS_PER_EPOCH, # epoch
-        (ticks - genesis_ticks) % TICKS_PER_EPOCH   # local slot
+        epoch,
+        rem_ticks // TICKS_PER_SLOT   # local slot
     )
 
-def ms_to_gslot(ticks):
+def ms_to_gslot(ticks: int):
     '''
     Converts time (ms) to global Mina slot
     '''
-    return (ticks - genesis_ticks) // TICKS_PER_SLOT
+    return (ticks - GENESIS_TICKS) // TICKS_PER_SLOT
 
-def ms_to_eslot(ticks):
+def ms_to_eslot(ticks: int):
     '''
     Converts time (ms) to local (current epoch) Mina slot
     '''
-    ticks_into_epoch = (ticks - genesis_ticks) % TICKS_PER_SLOT
+    ticks_into_epoch = (ticks - GENESIS_TICKS) % TICKS_PER_SLOT
     return ticks_into_epoch // TICKS_PER_SLOT
 
 # cli
@@ -102,17 +101,17 @@ def gen_from_ms(arg, value):
     assert arg in valid_args
 
     res = None
-    if arg == 'epoch':
+    if arg in {'e', 'es', 'epoch'}:
         res = ms_to_epoch(value)
-    if arg == 'slot':
+    if arg in {'gs', 'slot'}:
         res = ms_to_gslot(value)
-    if arg == 'iso':
+    if arg in {'i', 'iso'}:
         res = ms_to_iso(value)
     if arg == 'ms':
         res = value
     return res
 
-def gen_to_ms(init_type, value):
+def gen_to_ms(init_type, value) -> int:
     '''
     Converts the `value` of type `init_type` to ms
     '''
@@ -120,14 +119,14 @@ def gen_to_ms(init_type, value):
     res = value
     if init_type != 'ms':
         if init_type == "epoch":
-            assert value[0] and value[1]
+            assert len(value) == 2
             res = epoch_slot_to_ms(value)
         if init_type == "iso":
-            assert value[0]
-            res = iso_to_ms(value)
+            assert len(value) == 1
+            res = iso_to_ms(value[0])
         if init_type == "slot":
-            assert value[0]
-            res = gslot_to_ms(value)
+            assert len(value) == 1
+            res = gslot_to_ms(value[0])
     return res
 
 def handlers(args) -> "list[str]":
@@ -141,12 +140,13 @@ def handlers(args) -> "list[str]":
                 res.append(arg)
     return res
 
-def dispatch(args):
+def dispatch(args, res):
     '''
-    Maps `gen_dispatch` over appropriate handlers
+    Applies appropriate handlers
 
     # TODO returning [None]
     '''
+    args = vars(args)
     arg_t = args["type"]
     input = args["input"]
     # single value (only [0]) for everything except
@@ -154,15 +154,12 @@ def dispatch(args):
 
     hdlrs = handlers(args)
     input_ms = gen_to_ms(arg_t, input)
-    f = lambda h: gen_from_ms(h, input_ms)
-    res = list(map(f, hdlrs))
-
-    if not res:
-        print("no options selected")
-    print(f"arg_t: {arg_t}")
-    print(f"input: {input}")
-    print(f"hdlrs: {hdlrs}")
-    print(res)
+    if not hdlrs:
+        hdlrs = valid_args
+    res = {}
+    for hdlr in hdlrs:
+        res[hdlr] = gen_from_ms(hdlr, input_ms)
+    print(json.dumps(res, indent=4))
     return res
 
 if __name__ == "__main__":
@@ -192,9 +189,8 @@ if __name__ == "__main__":
     res   = { "e" : epoch, "es" : eslot, "gs" : gslot, "i" : iso, "ms" : ticks }
 
     # parse and handle args
-    args = vars(parser.parse_args())
-    print(dispatch(args))
-    # TODO
+    args = parser.parse_args()
+    dispatch(args, res)
 
 #############
 # resources #
