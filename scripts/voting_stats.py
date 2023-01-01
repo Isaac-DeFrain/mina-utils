@@ -3,13 +3,11 @@
 import os
 import json
 import base58
-import asyncio
 import pathlib
 import argparse
 import statistics
-from google.cloud import storage
-from python_graphql_client import GraphqlClient
-from voting_stats_constants import LOCAL_DATA_DIR, START_TIME, END_TIME
+import voting_stats_graphql as vsg
+import voting_stats_constants as vsc
 
 # Steps
 # 0. provide ledger hash
@@ -21,26 +19,16 @@ from voting_stats_constants import LOCAL_DATA_DIR, START_TIME, END_TIME
 # 6. stake-weight votes
 # 7. aggregate yes and no vote weights
 
-def data_loc(ledger_hash):
-    return str(LOCAL_DATA_DIR / f"{ledger_hash}.json")
+# Granola's ledger data
+# "https://raw.githubusercontent.com/Granola-Team/mina-ledger/main/mainnet/{}.json"
 
-# stake
+def data_loc(ledger_hash):
+    return str(vsc.LOCAL_DATA_DIR / f"{ledger_hash}.json")
+
+# stake distribution
 
 def download_ledger_to_local_file(ledger_hash):
-    """
-    Downloads ledger from Mina explorer
-    """
-    if not LOCAL_DATA_DIR.exists():
-        os.mkdir(LOCAL_DATA_DIR)
-    print(f"Downloading ledger with hash {ledger_hash} from Mina explorer...")
-    bucket_name = "mina-explorer-ledgers"
-    fname = ledger_hash + ".json"
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(fname)
-    blob.download_to_filename(data_loc(ledger_hash))
-    print("Downloaded successful!")
-    print(f"Writing to local file ../{fname}")
+    pass
 
 def filter_dict_keys(keys, dict):
     res = {}
@@ -70,7 +58,7 @@ def aggregate_stake(ledger):
                 res[dg] = 0
             res[dg] += bal
     print("Writing aggregated stake to local file...")
-    fpath = LOCAL_DATA_DIR / "aggregated-stake.json"
+    fpath = vsc.LOCAL_DATA_DIR / "aggregated-stake.json"
     with fpath.open("w") as f:
         json.dump(res, f, indent=4)
         f.close()
@@ -78,43 +66,17 @@ def aggregate_stake(ledger):
 
 # votes
 
-def download_transactions(endpoint, start_time=START_TIME, end_time=END_TIME):
+def download_transactions(endpoint: str = vsc.MINA_EXPLORER, variables = {}) -> dict:
     """
     Downloads transactions in voting period beginning at `start_time`
     and ending at `end_time` from the graphql `endpoint`
     """
-    # gql_client = GraphqlClient(endpoint) #, headers=hdrs)
-    # query_all_txs_in_voting_period = '''{
-    #     transactions(query: {
-    #         dateTime_gte: "%s",
-    #         dateTime_lte: "%s"
-    #     },
-    #     sortBy: DATETIME_DESC
-    #     ) {
-    #         dateTime
-    #         kind
-    #         memo
-    #         receiver {
-    #             publicKey
-    #         }
-    #         source {
-    #             publicKey
-    #         }
-    #     }
-    # }''' % (start_time, end_time)
-    # try:
-    #     raw_tx_data = asyncio.run(gql_client.execute_async(query=query_all_txs_in_voting_period))
-    # except:
-    #     raw_tx_data = {"error" : "invalid content type"}
-    fpath = LOCAL_DATA_DIR / "transactions.json"
-    # with fpath.open("w") as f:
-    #     f.write(json.dumps(raw_tx_data, indent=4))
-    #     f.close()
-    # return raw_tx_data
-    with fpath.open("r") as f:
-        txs = json.load(f)
+    pass
+    fpath = vsc.LOCAL_DATA_DIR / "transactions.json"
+    with fpath.open("w") as f:
+        f.write(json.dumps(raw_tx_data, indent=4))
         f.close()
-    return txs
+    return raw_tx_data
 
 def is_vote(raw_tx):
     return all([
@@ -150,6 +112,10 @@ def parse_transactions(raw_tx_data):
 
 # statistics
 
+def decode_memo(d: dict) -> dict:
+	d["memo"] = base58.b58decode(d["memo"])
+	return d
+
 def trim_bytes(bs):
     res = []
     for b in bs:
@@ -169,7 +135,7 @@ def unpad_base58(b58_encoded):
 def memo_of_vote(vote):
     memo = base58.b58decode(f'{vote[1]}')
     memo = unpad_base58(memo)
-    return memo
+    return memo.strip()
 
 def in_favor(vote, keyword):
     memo = memo_of_vote(vote)
@@ -213,14 +179,16 @@ def stats(agg_stake, votes, keyword, delegations, num_txs):
             except:
                 pass
 
-    print("")
+    print()
     print("~~~~~~~~~~~~~~")
     print("~ Statistics ~")
     print("~~~~~~~~~~~~~~")
     print(f"~ Total ~")
     print(f"Num transactions: {num_txs}")
-    print(f"Num votes:        {len(votes)}")
     print(f"Num delegations:  {len(delegations)}")
+    print(f"Num yes votes:    {yes_votes}")
+    print(f"Num no votes:     {no_votes}")
+    print(f"Num votes:        {len(votes)}")
     print(f"~ Votes ~")
     print(f"Yes vote weight:  {yes_weight} ({yes_votes})")
     print(f"No vote weight:   {no_weight} ({no_votes})")
@@ -237,13 +205,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
     ledger_hash = args.lh[0]
     keyword = args.kw[0]
-    endpoint = args.gq[0] if args.gq else "https://graphql.minaexplorer.com"
+    endpoint = args.gq[0] if args.gq else vsc.MINA_EXPLORER
     if not pathlib.Path(data_loc(ledger_hash)).exists():
         download_ledger_to_local_file(ledger_hash)
     print(f"Using graphql endpoint: {endpoint}")
     ledger = parse_ledger(ledger_hash)
     agg_stake = aggregate_stake(ledger)
-    raw_tx_data = download_transactions(endpoint)
+    raw_tx_data = download_transactions(endpoint, {})
     raw_votes, delegations, num_txs = parse_transactions(raw_tx_data)
     votes = list(filter(lambda v: memo_of_vote(v) != '', raw_votes))
     stats(agg_stake, votes, keyword, delegations, num_txs)
