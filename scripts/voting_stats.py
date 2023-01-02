@@ -1,9 +1,9 @@
 #!/usr/bin/bash
 
 import os
+import sys
 import json
 import base58
-import pathlib
 import argparse
 import statistics
 import voting_stats_graphql as vsg
@@ -22,13 +22,26 @@ import voting_stats_constants as vsc
 # Granola's ledger data
 # "https://raw.githubusercontent.com/Granola-Team/mina-ledger/main/mainnet/{}.json"
 
-def data_loc(ledger_hash):
-    return str(vsc.LOCAL_DATA_DIR / f"{ledger_hash}.json")
+def data_loc(fname):
+    return vsc.LOCAL_DATA_DIR / f"{fname}.json"
 
 # stake distribution
 
-def download_ledger_to_local_file(ledger_hash):
-    pass
+def get_next_staking_ledger_hash(epoch: int, endpoint: str = vsc.MINA_EXPLORER) -> str:
+    return vsg.get_next_ledger_hash(epoch + 1, endpoint)["data"]["blocks"][0]["protocolState"]["consensusState"]["nextEpochData"]["ledger"]["hash"]
+
+def download_ledger(ledger_hash: str) -> list:
+    """
+    Downloads next staking ledger from Mina explorer
+    """
+    if not vsc.LOCAL_DATA_DIR.exists():
+        os.mkdir(vsc.LOCAL_DATA_DIR)
+    print(f"Downloading ledger with hash {ledger_hash} from Mina explorer...")
+    raw_ledger_list = vsg.get_next_staking_ledger(ledger_hash)["data"]["nextstakes"]
+    with data_loc(ledger_hash).open("w", encoding="utf-8") as f:
+        f.write(vsg.pp(raw_ledger_list))
+        f.close()
+    return raw_ledger_list
 
 def filter_dict_keys(keys, dict):
     res = {}
@@ -36,19 +49,15 @@ def filter_dict_keys(keys, dict):
         res[k] = dict[k]
     return res
 
-def parse_ledger(ledger_hash):
-    fname = data_loc(ledger_hash)
-    with open(fname, "r") as f:
-        accounts = json.load(f)
-        f.close()
+def parse_ledger(raw_ledger_list):
     essential = ['balance', 'delegate']
-    ledger = filter(lambda d: filter_dict_keys(essential, d), accounts)
+    ledger = filter(lambda d: filter_dict_keys(essential, d), raw_ledger_list)
     return list(ledger)
 
-def aggregate_stake(ledger):
+def aggregate_stake(ledger_list):
     print("Aggregating stake...")
     res = {}
-    for account in ledger:
+    for account in ledger_list:
         dg = account['delegate']
         bal = float(account['balance'])
         if bal > 0:
@@ -59,22 +68,21 @@ def aggregate_stake(ledger):
             res[dg] += bal
     print("Writing aggregated stake to local file...")
     fpath = vsc.LOCAL_DATA_DIR / "aggregated-stake.json"
-    with fpath.open("w") as f:
-        json.dump(res, f, indent=4)
+    with fpath.open("w", encoding="utf-8") as f:
+        f.write(vsg.pp(res))
         f.close()
     return res
 
 # votes
 
-def download_transactions(endpoint: str = vsc.MINA_EXPLORER, variables = {}) -> dict:
+def download_transactions(variables = {}, endpoint: str = vsc.MINA_EXPLORER) -> dict:
     """
-    Downloads transactions in voting period beginning at `start_time`
-    and ending at `end_time` from the graphql `endpoint`
+    Downloads transactions in voting period from the graphql `endpoint`
     """
-    pass
-    fpath = vsc.LOCAL_DATA_DIR / "transactions.json"
-    with fpath.open("w") as f:
-        f.write(json.dumps(raw_tx_data, indent=4))
+    # TODO pagination
+    raw_tx_data = vsg.get_transactions(variables, endpoint)["data"]["transactions"]
+    with data_loc("transactions").open("w", encoding="utf-8") as f:
+        f.write(vsg.pp(raw_tx_data))
         f.close()
     return raw_tx_data
 
@@ -97,7 +105,7 @@ def parse_transactions(raw_tx_data):
     num_txs = 0
     raw_votes = {}
     delegations = {}
-    for tx in raw_tx_data["data"]["transactions"]:
+    for tx in raw_tx_data:
         num_txs += 1
         pk = tx["source"]["publicKey"]
         if is_vote(tx):
@@ -111,10 +119,6 @@ def parse_transactions(raw_tx_data):
     return raw_voting, delegations, num_txs
 
 # statistics
-
-def decode_memo(d: dict) -> dict:
-	d["memo"] = base58.b58decode(d["memo"])
-	return d
 
 def trim_bytes(bs):
     res = []
@@ -135,21 +139,23 @@ def unpad_base58(b58_encoded):
 def memo_of_vote(vote):
     memo = base58.b58decode(f'{vote[1]}')
     memo = unpad_base58(memo)
-    return memo.strip()
+    return memo.strip().lower()
 
 def in_favor(vote, keyword):
     memo = memo_of_vote(vote)
+    keyword = " ".join(keyword.lower().split())
     if not memo:
         return False
     else:
-        return memo.lower() == keyword.lower()
+        return memo == keyword
 
 def against(vote, keyword):
     memo = memo_of_vote(vote)
+    keyword = " ".join(keyword.lower().split())
     if not memo:
         return False
     else:
-        return memo.lower() == f'no {keyword.lower()}'
+        return memo == f'no {keyword}'
 
 def stats(agg_stake, votes, keyword, delegations, num_txs):
     """
@@ -180,38 +186,77 @@ def stats(agg_stake, votes, keyword, delegations, num_txs):
                 pass
 
     print()
-    print("~~~~~~~~~~~~~~")
-    print("~ Statistics ~")
-    print("~~~~~~~~~~~~~~")
-    print(f"~ Total ~")
+    print("~~~~~~~~~~~~~~~~~~")
+    print("~~~ Statistics ~~~")
+    print("~~~~~~~~~~~~~~~~~~")
+    print(f"~~~ Total ~~~")
     print(f"Num transactions: {num_txs}")
     print(f"Num delegations:  {len(delegations)}")
     print(f"Num yes votes:    {yes_votes}")
     print(f"Num no votes:     {no_votes}")
     print(f"Num votes:        {len(votes)}")
-    print(f"~ Votes ~")
+    print(f"~~~ Votes ~~~")
     print(f"Yes vote weight:  {yes_weight} ({yes_votes})")
     print(f"No vote weight:   {no_weight} ({no_votes})")
-    print(f"~ Stake ~")
+    print(f"~~~ Stake ~~~")
     print(f"Total stake:      {total_stake}")
     print(f"Mean stake:       {statistics.mean(agg_stake.values())}")
     print(f"Stdev:            {statistics.stdev(agg_stake.values())}")
+    if args.v:
+        print("~~~ Votes ~~~")
+        print(vsg.pp(dict(map(lambda v: (v[0], memo_of_vote(v)), votes))))
+
+def check(args: argparse.Namespace) -> bool:
+    if not args.kw:
+        print("must provide a voting keyword via -kw")
+        sys.exit(1)
+    if not args.start:
+        print("must provide a start time for the voting period via -start")
+        sys.exit(1)
+    if not args.end:
+        print("must provide an end time for the voting period via -end")
+        sys.exit(1)
+    return any([
+        args.lh and not args.ep,
+        args.ep and not args.lh
+    ])
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Vote aggregator")
-    parser.add_argument("-lh", type=str, nargs=1, help="ledger hash")
-    parser.add_argument("-kw", type=str, nargs=1, help="keyword")
+    parser = argparse.ArgumentParser(description="Mina on-chain voting results calculator")
+    parser.add_argument("-kw", type=str, nargs=1, help="keyword/MIP")
+    parser.add_argument("-lh", action="store_true", help="ledger hash")
+    parser.add_argument("-ep", action="store_true", help="voting epoch number")
+    parser.add_argument("-v",  action="store_true", help="verbose")
     parser.add_argument("-gq", type=str, nargs="*", help="graphQL endpoint")
+    parser.add_argument("-start", type=str, nargs=1, help="voting period start time (in your local timezone) - ISO-8601 %Y-%m-%dT%H:%M:%SZ format")
+    parser.add_argument("-end", type=str, nargs=1, help="voting period end time (in your local timezone) - ISO-8601 %Y-%m-%dT%H:%M:%SZ format")
+    parser.add_argument("input")
     args = parser.parse_args()
-    ledger_hash = args.lh[0]
+    check(args)
+    if args.lh:
+        ledger_hash = args.input[0]
+    else:
+        ledger_hash = get_next_staking_ledger_hash(int(args.input))
+        print(f"Using next staking ledger with hash {ledger_hash}")
     keyword = args.kw[0]
     endpoint = args.gq[0] if args.gq else vsc.MINA_EXPLORER
-    if not pathlib.Path(data_loc(ledger_hash)).exists():
-        download_ledger_to_local_file(ledger_hash)
+    # only download the ledger if we don't already have it
+    if not data_loc(ledger_hash).exists():
+        raw_ledger_list = download_ledger(ledger_hash)
+    else:
+        with data_loc(ledger_hash).open("r", encoding="utf-8") as f:
+            raw_ledger_list = json.loads(f.read())
+            f.close()
     print(f"Using graphql endpoint: {endpoint}")
-    ledger = parse_ledger(ledger_hash)
-    agg_stake = aggregate_stake(ledger)
-    raw_tx_data = download_transactions(endpoint, {})
+    ledger_list = parse_ledger(raw_ledger_list)
+    agg_stake = aggregate_stake(ledger_list)
+    variables = {
+        "limit": 50,
+        "memo_exists": True,
+        "min_date_time": args.start[0],
+        "max_date_time": args.end[0]
+    }
+    raw_tx_data = download_transactions(variables, endpoint)
     raw_votes, delegations, num_txs = parse_transactions(raw_tx_data)
-    votes = list(filter(lambda v: memo_of_vote(v) != '', raw_votes))
+    votes = list(filter(lambda v: memo_of_vote(v), raw_votes))
     stats(agg_stake, votes, keyword, delegations, num_txs)
