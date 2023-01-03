@@ -9,6 +9,8 @@ LOCAL_DATA_DIR = PARENT_DIR / "voting-data"
 '''
 ./voting_data
 '''
+AGGREGATED_STAKE = LOCAL_DATA_DIR / "aggregated-stake.json"
+TRANSACTIONS = LOCAL_DATA_DIR / "transactions.json"
 
 MINA_EXPLORER = "https://graphql.minaexplorer.com"
 '''
