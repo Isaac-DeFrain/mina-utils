@@ -1,15 +1,13 @@
 #!/usr/bin/bash
 
 import os
+import sys
 import json
 import base58
-import asyncio
-import pathlib
 import argparse
-import statistics
-from google.cloud import storage
-from python_graphql_client import GraphqlClient
-from voting_stats_constants import LOCAL_DATA_DIR, START_TIME, END_TIME
+import requests
+import voting_stats_graphql as vsg
+import voting_stats_constants as vsc
 
 # Steps
 # 0. provide ledger hash
@@ -21,229 +19,304 @@ from voting_stats_constants import LOCAL_DATA_DIR, START_TIME, END_TIME
 # 6. stake-weight votes
 # 7. aggregate yes and no vote weights
 
-def data_loc(ledger_hash):
-    return str(LOCAL_DATA_DIR / f"{ledger_hash}.json")
+def data_loc(fname):
+    return vsc.LOCAL_DATA_DIR / f"{fname}.json"
 
-# stake
+# stake distribution
 
-def download_ledger_to_local_file(ledger_hash):
+def get_next_staking_ledger_hash(epoch: int, endpoint: str) -> str:
+    return vsg.get_next_ledger_hash(epoch + 1, endpoint)["data"]["blocks"][0]["protocolState"]["consensusState"]["nextEpochData"]["ledger"]["hash"]
+
+def download_ledger(ledger_hash: str) -> list:
     """
-    Downloads ledger from Mina explorer
+    Downloads next staking ledger from https://github.com/Granola-Team/mina-ledger/tree/main/mainnet/
     """
-    if not LOCAL_DATA_DIR.exists():
-        os.mkdir(LOCAL_DATA_DIR)
-    print(f"Downloading ledger with hash {ledger_hash} from Mina explorer...")
-    bucket_name = "mina-explorer-ledgers"
-    fname = ledger_hash + ".json"
-    storage_client = storage.Client()
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(fname)
-    blob.download_to_filename(data_loc(ledger_hash))
-    print("Downloaded successful!")
-    print(f"Writing to local file ../{fname}")
+    if not vsc.LOCAL_DATA_DIR.exists():
+        os.mkdir(vsc.LOCAL_DATA_DIR)
+    print(f"Downloading ledger with hash {ledger_hash} from {endpoint}...")
+    vsg.get_next_staking_ledger_granola_github(ledger_hash)
+    with data_loc(ledger_hash).open("r", encoding="utf-8") as f:
+        raw_ledger_list = list(json.load(f))
+        f.close()
+    return raw_ledger_list
 
-def filter_dict_keys(keys, dict):
+def filter_dict_keys(keys, dict: dict) -> dict:
     res = {}
     for k in keys:
         res[k] = dict[k]
     return res
 
-def parse_ledger(ledger_hash):
-    fname = data_loc(ledger_hash)
-    with open(fname, "r") as f:
-        accounts = json.load(f)
-        f.close()
+def parse_ledger(raw_ledger: list) -> list:
     essential = ['balance', 'delegate']
-    ledger = filter(lambda d: filter_dict_keys(essential, d), accounts)
+    ledger = filter(lambda d: filter_dict_keys(essential, d), raw_ledger_list)
     return list(ledger)
 
-def aggregate_stake(ledger):
+def aggregate_stake(ledger: list) -> dict:
     print("Aggregating stake...")
-    res = {}
+    agg_stake = {}
+    delegators = set()
     for account in ledger:
+        pk = account['pk']
         dg = account['delegate']
         bal = float(account['balance'])
-        if bal > 0:
-            try:
-                res[dg]
-            except KeyError:
-                res[dg] = 0
-            res[dg] += bal
-    print("Writing aggregated stake to local file...")
-    fpath = LOCAL_DATA_DIR / "aggregated-stake.json"
-    with fpath.open("w") as f:
-        json.dump(res, f, indent=4)
+        if pk != dg:
+            delegators.add(pk)
+        try:
+            agg_stake[dg] += bal
+        except KeyError:
+            agg_stake[dg] = bal
+    for d in delegators:
+        try:
+            del agg_stake[d]
+        except KeyError:
+            pass
+    with vsc.AGGREGATED_STAKE.open("w", encoding="utf-8") as f:
+        f.write(vsg.pp(agg_stake))
         f.close()
-    return res
+    return agg_stake
 
 # votes
 
-def download_transactions(endpoint, start_time=START_TIME, end_time=END_TIME):
+def get_block_heights_for_period(variables: dict, endpoint: str) -> list[int]:
     """
-    Downloads transactions in voting period beginning at `start_time`
-    and ending at `end_time` from the graphql `endpoint`
+    Returns block heights for the given voting period
     """
-    # gql_client = GraphqlClient(endpoint) #, headers=hdrs)
-    # query_all_txs_in_voting_period = '''{
-    #     transactions(query: {
-    #         dateTime_gte: "%s",
-    #         dateTime_lte: "%s"
-    #     },
-    #     sortBy: DATETIME_DESC
-    #     ) {
-    #         dateTime
-    #         kind
-    #         memo
-    #         receiver {
-    #             publicKey
-    #         }
-    #         source {
-    #             publicKey
-    #         }
-    #     }
-    # }''' % (start_time, end_time)
-    # try:
-    #     raw_tx_data = asyncio.run(gql_client.execute_async(query=query_all_txs_in_voting_period))
-    # except:
-    #     raw_tx_data = {"error" : "invalid content type"}
-    fpath = LOCAL_DATA_DIR / "transactions.json"
-    # with fpath.open("w") as f:
-    #     f.write(json.dumps(raw_tx_data, indent=4))
-    #     f.close()
-    # return raw_tx_data
-    with fpath.open("r") as f:
-        txs = json.load(f)
-        f.close()
-    return txs
+    assert variables["min_date_time"] and variables["max_date_time"]
+    raw_block_heights = vsg.get_block_heights(variables, endpoint)["data"]["blocks"]
+    return list(map(lambda d: d["blockHeight"], raw_block_heights))
 
-def is_vote(raw_tx):
+def get_transactions_in_block(block_height: int, endpoint: str) -> list[dict]:
+    """
+    Returns the list of payment transactions in the given block
+    """
+    variables = {"block_height": block_height}
+    return vsg.get_payments_in_block_height(variables, endpoint)["data"]["transactions"]
+
+def download_transactions(variables: dict, endpoint: str) -> dict:
+    """
+    Downloads transactions in voting period from the graphql `endpoint`
+    """
+    block_heights = get_block_heights_for_period(variables, endpoint)
+    print(f"Fetching blocks {block_heights[0]} - {block_heights[-1]}")
+    print("This may take several minutes...")
+    raw_tx_data = {}
+    # TODO async fetching
+    for height in block_heights:
+        raw_tx_data[height] = get_transactions_in_block(height, endpoint)
+        print(f"Got block {height}")
+    with vsc.TRANSACTIONS.open("w", encoding="utf-8") as f:
+        f.write(vsg.pp(raw_tx_data))
+        f.close()
+    return raw_tx_data
+
+def is_vote(raw_tx: dict, keyword: str) -> bool:
     return all([
-        raw_tx["memo"],
-        raw_tx["kind"] == 'PAYMENT',
+        in_favor(raw_tx["memo"], keyword) or against(raw_tx["memo"], keyword),
         raw_tx["source"]["publicKey"] == raw_tx["receiver"]["publicKey"]
     ])
 
-def is_delegation(raw_tx):
-    return raw_tx["kind"] == 'STAKE_DELEGATION'
-
-def parse_transactions(raw_tx_data):
+def parse_transactions(per_block_tx_data: dict, keyword: str) -> tuple[list, int]:
     """
     Parses raw transaction data
 
-    Returns raw votes (`memo` base58 encoded) and delegations { sender_pk : receiver_pk }
+    Returns raw votes (`memo` base58 encoded) and number of votes
     """
     num_txs = 0
     raw_votes = {}
-    delegations = {}
-    for tx in raw_tx_data["data"]["transactions"]:
+    txns = []
+    for block_height in per_block_tx_data.keys():
+        txns += raw_tx_data[block_height]
+    for tx in txns:
         num_txs += 1
         pk = tx["source"]["publicKey"]
-        if is_vote(tx):
-            raw_votes[pk] = tx["memo"]
-        elif is_delegation(tx):
-            delegations[pk] = tx["receiver"]["publicKey"]
-        raw_votes[pk] = tx["memo"]
+        if is_vote(tx, keyword):
+            memo = tx["memo"]
+            height = tx["blockHeight"]
+            nonce = tx["nonce"]
+            try:
+                v = raw_votes[pk]
+                if v[1] < height or v[1] == height and v[2] < nonce:
+                    raw_votes[pk] = [memo, height, nonce]
+                else:
+                    pass
+            except KeyError:
+                raw_votes[pk] = [memo, height, nonce]
     raw_voting = []
-    for k in raw_votes.keys():
-        raw_voting.append((k, raw_votes[k]))
-    return raw_voting, delegations, num_txs
+    for pk in raw_votes.keys():
+        raw_voting.append([pk] + raw_votes[pk])
+    return raw_voting, num_txs
 
 # statistics
 
-def trim_bytes(bs):
-    res = []
-    for b in bs:
-        if b:
-            res.append(b)
-    return bytes(res)
-
-def unpad_base58(b58_encoded):
-    if not b58_encoded[:3] == b"\x14\x01\x00":
-        n = b58_encoded[2]
-        memo = b58_encoded[3:]
-        memo = memo[:-(n + 1)]
-        return trim_bytes(memo).decode('utf8')
+def decode_memo(b58_encoded: str) -> str:
+    '''
+    Returns the base58 decoded input
+    '''
+    decoded = base58.b58decode(b58_encoded)
+    if decoded[1] == b'x01':
+        res = ""
     else:
-        return ""
+        end_idx = decoded[2] + 3
+        memo = decoded[3:end_idx]
+        res = memo.decode('utf-8')
+    return res
 
-def memo_of_vote(vote):
-    memo = base58.b58decode(f'{vote[1]}')
-    memo = unpad_base58(memo)
-    return memo
+def memo_of_vote(encoded_memo: str) -> str:
+    '''
+    Returns the lowercase, base58 decoded memo field
+    '''
+    memo = decode_memo(encoded_memo)
+    return memo.lower()
 
-def in_favor(vote, keyword):
-    memo = memo_of_vote(vote)
+def in_favor(encoded_memo, keyword) -> bool:
+    memo = memo_of_vote(encoded_memo)
     if not memo:
         return False
     else:
-        return memo.lower() == keyword.lower()
+        return memo == keyword
 
-def against(vote, keyword):
-    memo = memo_of_vote(vote)
+def against(encoded_memo, keyword) -> bool:
+    memo = memo_of_vote(encoded_memo)
     if not memo:
         return False
     else:
-        return memo.lower() == f'no {keyword.lower()}'
+        return memo == f'no {keyword}'
 
-def stats(agg_stake, votes, keyword, delegations, num_txs):
+# def is_counted(v: list, keyword: str) -> bool:
+#     return in_favor(v, keyword) or against(v, keyword)
+
+def stats(agg_stake, votes, keyword, num_txs):
     """
-    Tally votes for `keyword` and report statistics
+    Tally vote weights for `keyword` and report statistics
     """
     no_votes = 0
     no_weight = 0
     yes_votes = 0
     yes_weight = 0
-    total_stake = 0
     stake_dist = {}
-    for v in agg_stake.values():
-        total_stake += v
-    for pk in agg_stake.keys():
-        stake_dist[pk] = agg_stake[pk] / total_stake
+    total_vote_stake = 0
+    for v in votes:
+        try:
+            total_vote_stake += agg_stake[v[0]]
+        except KeyError:
+            pass
+    for v in votes:
+        pk = v[0]
+        try:
+            stake_dist[pk] = agg_stake[pk] / total_vote_stake
+        except:
+            pass
     for vote in votes:
-        if in_favor(vote, keyword):
-            yes_votes += 1
-            try:
-                yes_weight += stake_dist[vote[0]]
-            except:
-                pass
-        elif against(vote, keyword):
-            no_votes += 1
-            try:
-                no_weight += stake_dist[vote[0]]
-            except:
-                pass
+        pk = vote[0]
+        memo = vote[1]
+        if pk in agg_stake.keys():
+            if in_favor(memo, keyword):
+                yes_votes += 1
+                try:
+                    yes_weight += stake_dist[pk]
+                except:
+                    pass
+            elif against(memo, keyword):
+                no_votes += 1
+                try:
+                    no_weight += stake_dist[pk]
+                except:
+                    pass
 
-    print("")
-    print("~~~~~~~~~~~~~~")
-    print("~ Statistics ~")
-    print("~~~~~~~~~~~~~~")
-    print(f"~ Total ~")
+    print()
+    print("~~~~~~~~~~~~~~~~~~")
+    print("~~~ Statistics ~~~")
+    print("~~~~~~~~~~~~~~~~~~")
+    print()
+    print(f"~~~ Total ~~~")
     print(f"Num transactions: {num_txs}")
-    print(f"Num votes:        {len(votes)}")
-    print(f"Num delegations:  {len(delegations)}")
-    print(f"~ Votes ~")
-    print(f"Yes vote weight:  {yes_weight} ({yes_votes})")
-    print(f"No vote weight:   {no_weight} ({no_votes})")
-    print(f"~ Stake ~")
-    print(f"Total stake:      {total_stake}")
-    print(f"Mean stake:       {statistics.mean(agg_stake.values())}")
-    print(f"Stdev:            {statistics.stdev(agg_stake.values())}")
+    print(f"Num yes votes:    {yes_votes}")
+    print(f"Num no votes:     {no_votes}")
+    print(f"Total vote stake: {total_vote_stake}")
+    print()
+    print(f"~~~ Votes ~~~")
+    print(f"Yes vote weight:  {yes_weight}")
+    print(f"No vote weight:   {no_weight}")
+    # print(f"Mean stake:       {statistics.mean(agg_stake.values())}")
+    # print(f"Stdev:            {statistics.stdev(agg_stake.values())}")
+    if args.v:
+        print()
+        print("~~~ Raw votes ~~~")
+        print(vsg.pp(dict(map(
+            lambda v: (v[0], {
+                "vote": memo_of_vote(v[1]),
+                "stake": pp_stake(agg_stake, v[0]),
+                "weight": pp_stake(stake_dist, v[0])
+            }),
+            votes
+        ))))
+
+def pp_stake(stake_dist: dict, pk: str):
+    try:
+        return stake_dist[pk]
+    except KeyError:
+        return "delegated"
+
+def check(args: argparse.Namespace) -> bool:
+    if not args.kw:
+        print("must provide a voting keyword via -kw")
+        sys.exit(1)
+    if not args.start:
+        print("must provide a start time for the voting period via -start")
+        sys.exit(1)
+    if not args.end:
+        print("must provide an end time for the voting period via -end")
+        sys.exit(1)
+    return any([
+        args.lh and not args.ep,
+        args.ep and not args.lh
+    ])
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Vote aggregator")
-    parser.add_argument("-lh", type=str, nargs=1, help="ledger hash")
-    parser.add_argument("-kw", type=str, nargs=1, help="keyword")
-    parser.add_argument("-gq", type=str, nargs="*", help="graphQL endpoint")
+    parser = argparse.ArgumentParser(description="Mina on-chain voting results calculator")
+    parser.add_argument("-kw", type=str, nargs=1, help="keyword/MIP")
+    parser.add_argument("-lh", action="store_true", help="ledger hash")
+    parser.add_argument("-ep", action="store_true", help="voting epoch number")
+    parser.add_argument("-v",  action="store_true", help="verbose")
+    parser.add_argument("-gq", type=str, nargs="*", help=f"graphQL endpoint (default: {vsc.MINA_EXPLORER})")
+    parser.add_argument("-start", type=str, nargs=1, help="voting period start time (in your local timezone) - ISO-8601 Y-m-dTH:M:SZ format")
+    parser.add_argument("-end", type=str, nargs=1, help="voting period end time (in your local timezone) - ISO-8601 Y-m-dTH:M:SZ format")
+    parser.add_argument("input", help="captures epoch or ledger hash")
     args = parser.parse_args()
-    ledger_hash = args.lh[0]
+    check(args)
     keyword = args.kw[0]
-    endpoint = args.gq[0] if args.gq else "https://graphql.minaexplorer.com"
-    if not pathlib.Path(data_loc(ledger_hash)).exists():
-        download_ledger_to_local_file(ledger_hash)
-    print(f"Using graphql endpoint: {endpoint}")
-    ledger = parse_ledger(ledger_hash)
-    agg_stake = aggregate_stake(ledger)
-    raw_tx_data = download_transactions(endpoint)
-    raw_votes, delegations, num_txs = parse_transactions(raw_tx_data)
-    votes = list(filter(lambda v: memo_of_vote(v) != '', raw_votes))
-    stats(agg_stake, votes, keyword, delegations, num_txs)
+    endpoint = args.gq[0] if args.gq else vsc.MINA_EXPLORER
+    variables = {
+        "min_date_time": args.start[0] if args.start else vsc.START_TIME,
+        "max_date_time": args.end[0] if args.end else vsc.END_TIME
+    }
+    if args.lh:
+        ledger_hash = str(args.input)
+    else:
+        # args.ep
+        ledger_hash = get_next_staking_ledger_hash(int(args.input), endpoint)
+    # only download the ledger if we don't already have it
+    if not data_loc(ledger_hash).exists():
+        raw_ledger_list = download_ledger(ledger_hash)
+    else:
+        with data_loc(ledger_hash).open("r", encoding="utf-8") as f:
+            raw_ledger_list = json.load(f)
+            f.close()
+    ledger_list = parse_ledger(raw_ledger_list)
+    # only aggregate stake if we haven't done so already
+    if not vsc.AGGREGATED_STAKE.exists():
+        agg_stake = aggregate_stake(ledger_list)
+    else:
+        print(f"Reading aggregated from {vsc.AGGREGATED_STAKE}")
+        with vsc.AGGREGATED_STAKE.open("r", encoding="utf-8") as f:
+            agg_stake = json.load(f)
+            f.close()
+    # only download the transactions if we don't already have them
+    if not vsc.TRANSACTIONS.exists():
+        raw_tx_data = download_transactions(variables, endpoint)
+    else:
+        with vsc.TRANSACTIONS.open("r", encoding="utf-8") as f:
+            raw_tx_data = json.load(f)
+            f.close()
+    votes, num_txs = parse_transactions(raw_tx_data, keyword)
+    stats(agg_stake, votes, keyword, num_txs)
