@@ -18,6 +18,9 @@ TICKS_PER_SLOT  = 180_000
 TICKS_PER_EPOCH = TICKS_PER_SLOT * SLOTS_PER_EPOCH
 GENESIS_TICKS   = 1615935600000
 
+valid_args = ['e', 'es', 'epoch', 'g', 'gs', 'slot', 'i', 'iso', 'ms']
+valid_cmds = ['epoch', 'slot', 'iso', 'ms']
+
 def iso8601_to_datetime(iso: str):
     '''
     Parse ISO-8601 DateTime string to datetime object
@@ -41,7 +44,7 @@ def iso_to_ms(iso: str) -> int:
     # convert to ms
     return int(dt.timestamp() * 1000)
 
-def epoch_slot_to_ms(epoch_slot: "tuple[int, int]") -> int:
+def epoch_slot_to_ms(epoch_slot: tuple[int, int]) -> int:
     '''
     Converts Mina `(epoch, slot)` to time (ms)
     '''
@@ -91,9 +94,6 @@ def ms_to_eslot(ticks: int):
 
 # cli
 
-valid_args = ['e', 'es', 'gs', 'i', 'ms']
-valid_cmds = ['epoch', 'slot', 'iso', 'ms']
-
 def gen_from_ms(arg, value):
     '''
     Generic conversion from time (ms)
@@ -103,7 +103,7 @@ def gen_from_ms(arg, value):
     res = None
     if arg in {'e', 'es', 'epoch'}:
         res = ms_to_epoch(value)
-    if arg in {'gs', 'slot'}:
+    if arg in {'g', 'gs', 'slot'}:
         res = ms_to_gslot(value)
     if arg in {'i', 'iso'}:
         res = ms_to_iso(value)
@@ -121,15 +121,15 @@ def gen_to_ms(init_type, value) -> int:
         if init_type == "epoch":
             assert len(value) == 2
             res = epoch_slot_to_ms(value)
-        if init_type == "iso":
+        elif init_type == "iso":
             assert len(value) == 1
             res = iso_to_ms(value[0])
-        if init_type == "slot":
+        elif init_type == "slot":
             assert len(value) == 1
             res = gslot_to_ms(value[0])
     return res
 
-def handlers(args) -> "list[str]":
+def handlers(args) -> list[str]:
     '''
     The to-be-dispatched handlers for `args`
     '''
@@ -140,11 +140,22 @@ def handlers(args) -> "list[str]":
                 res.append(arg)
     return res
 
-def dispatch(args, res):
+def name(hdlr: str) -> str:
+    idx = valid_args.index(hdlr)
+    res = ""
+    if idx < 3:
+        res = "epoch"
+    if 3 <= idx < 6:
+        res = "slot"
+    if 6 <= idx < 8:
+        res = "iso"
+    if idx == 8:
+        res = "ms"
+    return res
+
+def dispatch(args):
     '''
     Applies appropriate handlers
-
-    # TODO returning [None]
     '''
     args = vars(args)
     arg_t = args["type"]
@@ -158,9 +169,8 @@ def dispatch(args, res):
         hdlrs = valid_args
     res = {}
     for hdlr in hdlrs:
-        res[hdlr] = gen_from_ms(hdlr, input_ms)
+        res[name(hdlr)] = gen_from_ms(hdlr, input_ms)
     print(json.dumps(res, indent=4))
-    return res
 
 if __name__ == "__main__":
     import doctest
@@ -172,28 +182,10 @@ if __name__ == "__main__":
     # tick  - convert ms to Mina time
     parser = argparse.ArgumentParser(description="Mina Time Travel Utility - so you don't have to 😎")
     parser.add_argument("-t", "--type", choices=['epoch', 'slot', 'iso', 'ms'], default='iso', help="input type")
-
-    parser.add_argument("-e",  action="store_true", help="convert to Mina epoch number")
-    parser.add_argument("-es", action="store_true", help="convert to Mina current epoch slot number")
-    parser.add_argument("-gs", action="store_true", help="convert to Mina global slot number")
-    parser.add_argument("-i",  action="store_true", help="convert to iso 8601")
+    parser.add_argument("-e", "-es", "-epoch",  action="store_true", help="convert to Mina epoch and slot number")
+    parser.add_argument("-g", "-gs", "-slot", action="store_true", help="convert to Mina global slot number")
+    parser.add_argument("-i", "-iso",  action="store_true", help="convert to iso 8601")
     parser.add_argument("-ms", action="store_true", help="convert to ms")
     parser.add_argument("input", type=str, nargs="+")
-
-    # setup results
-    epoch = None
-    eslot = None
-    gslot = None
-    ticks = None
-    iso   = None
-    res   = { "e" : epoch, "es" : eslot, "gs" : gslot, "i" : iso, "ms" : ticks }
-
-    # parse and handle args
     args = parser.parse_args()
-    dispatch(args, res)
-
-#############
-# resources #
-#############
-#
-# - [Mina time machine](https://towerstake.com/mina-time-machine/)
+    dispatch(args)
