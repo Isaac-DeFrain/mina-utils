@@ -1,23 +1,10 @@
-#!/usr/bin/bash
-
 import os
 import sys
 import json
 import base58
 import argparse
-import requests
 import voting_stats_graphql as vsg
 import voting_stats_constants as vsc
-
-# Steps
-# 0. provide ledger hash
-# 1. download ledger data from https://docs.minaexplorer.com/minaexplorer/data-archive/ledger_hash to local file
-# 2. filter out essential fields for calculated stake: balance and delegate
-# 3. aggregate each public key's stake
-# 4. compute total stake
-# 5. download relevant transaction data from https://graphql.minaexplorer.com GraphQL API
-# 6. stake-weight votes
-# 7. aggregate yes and no vote weights
 
 def data_loc(fname):
     return vsc.LOCAL_DATA_DIR / f"{fname}.json"
@@ -35,9 +22,6 @@ def download_ledger(ledger_hash: str) -> list:
         os.mkdir(vsc.LOCAL_DATA_DIR)
     print(f"Downloading ledger with hash {ledger_hash} from {endpoint}...")
     vsg.get_next_staking_ledger_granola_github(ledger_hash)
-    with data_loc(ledger_hash).open("r", encoding="utf-8") as f:
-        raw_ledger_list = list(json.load(f))
-        f.close()
     return raw_ledger_list
 
 def filter_dict_keys(keys, dict: dict) -> dict:
@@ -48,7 +32,7 @@ def filter_dict_keys(keys, dict: dict) -> dict:
 
 def parse_ledger(raw_ledger: list) -> list:
     essential = ['balance', 'delegate']
-    ledger = filter(lambda d: filter_dict_keys(essential, d), raw_ledger_list)
+    ledger = filter(lambda d: filter_dict_keys(essential, d), raw_ledger)
     return list(ledger)
 
 def aggregate_stake(ledger: list) -> dict:
@@ -182,12 +166,9 @@ def against(encoded_memo, keyword) -> bool:
     else:
         return memo == f'no {keyword}'
 
-# def is_counted(v: list, keyword: str) -> bool:
-#     return in_favor(v, keyword) or against(v, keyword)
-
-def stats(agg_stake, votes, keyword, num_txs):
+def results(agg_stake, votes, keyword, num_txs):
     """
-    Tally vote weights for `keyword` and report statistics
+    Tally vote weights for `keyword` and report results to stdout
     """
     no_votes = 0
     no_weight = 0
@@ -204,7 +185,7 @@ def stats(agg_stake, votes, keyword, num_txs):
         pk = v[0]
         try:
             stake_dist[pk] = agg_stake[pk] / total_vote_stake
-        except:
+        except KeyError:
             pass
     for vote in votes:
         pk = vote[0]
@@ -214,19 +195,18 @@ def stats(agg_stake, votes, keyword, num_txs):
                 yes_votes += 1
                 try:
                     yes_weight += stake_dist[pk]
-                except:
+                except KeyError:
                     pass
             elif against(memo, keyword):
                 no_votes += 1
                 try:
                     no_weight += stake_dist[pk]
-                except:
+                except KeyError:
                     pass
-
     print()
-    print("~~~~~~~~~~~~~~~~~~")
-    print("~~~ Statistics ~~~")
-    print("~~~~~~~~~~~~~~~~~~")
+    print("~~~~~~~~~~~~~~~~~~~~~~")
+    print("~~~ Voting Results ~~~")
+    print("~~~~~~~~~~~~~~~~~~~~~~")
     print()
     print(f"~~~ Total ~~~")
     print(f"Num transactions: {num_txs}")
@@ -237,8 +217,6 @@ def stats(agg_stake, votes, keyword, num_txs):
     print(f"~~~ Votes ~~~")
     print(f"Yes vote weight:  {yes_weight}")
     print(f"No vote weight:   {no_weight}")
-    # print(f"Mean stake:       {statistics.mean(agg_stake.values())}")
-    # print(f"Stdev:            {statistics.stdev(agg_stake.values())}")
     if args.v:
         print()
         print("~~~ Raw votes ~~~")
@@ -319,4 +297,4 @@ if __name__ == '__main__':
             raw_tx_data = json.load(f)
             f.close()
     votes, num_txs = parse_transactions(raw_tx_data, keyword)
-    stats(agg_stake, votes, keyword, num_txs)
+    results(agg_stake, votes, keyword, num_txs)
