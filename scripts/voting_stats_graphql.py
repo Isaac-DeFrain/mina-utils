@@ -1,9 +1,25 @@
+import os
+import sys
 import json
 import requests
 import voting_stats_constants as vsc
 
 def pp(resp):
 	return json.dumps(resp, indent=4)
+
+def get_next_staking_ledger_granola_github(ledger_hash: str):
+    '''
+    Request the next staking ledger via hash from Granola's GitHub
+    '''
+    if not vsc.GITHUB_AUTH_TOKEN.exists():
+        print(f"You must copy a github auth token to file {vsc.GITHUB_AUTH_TOKEN}")
+        sys.exit(1)
+    with vsc.GITHUB_AUTH_TOKEN.open("r", encoding="utf-8") as f:
+        auth_token = f.read().strip()
+        f.close()
+    os.system(f'curl -H "Accept: application/vnd.github.v4.raw" \
+     -H "Authorization: bearer {auth_token}" \
+     "https://raw.githubusercontent.com/Granola-Team/mina-ledger/main/mainnet/{ledger_hash}.json" > {vsc.LOCAL_DATA_DIR / ledger_hash}.json')
 
 def template_request(query: str, variables: dict = {}, endpoint: str = vsc.MINA_EXPLORER) -> dict:
     '''
@@ -50,9 +66,9 @@ def get_next_staking_ledger(ledger_hash: str, endpoint: str = vsc.MINA_EXPLORER)
 
     Variables: `limit`, `ledgerHash`
     '''
-    query = """query ($ledgerHash: String!, $limit: Int = 200000) {
+    query = """query ($ledgerHash: String!, $limit: Int = 1000000) {
   nextstakes(query: {ledgerHash: $ledgerHash}, limit: $limit) {
-    public_key
+    pk
     balance
     delegate
   }
