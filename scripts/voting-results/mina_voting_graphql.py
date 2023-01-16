@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import requests
-import voting_stats_constants as vsc
+import mina_voting_constants as mvc
 
 def pp(resp):
 	return json.dumps(resp, indent=4)
@@ -11,17 +11,17 @@ def get_next_staking_ledger_granola_github(ledger_hash: str):
     '''
     Request the next staking ledger via hash from Granola's GitHub
     '''
-    if not vsc.GITHUB_AUTH_TOKEN.exists():
-        print(f"You must copy a github auth token to file {vsc.GITHUB_AUTH_TOKEN}")
+    if not mvc.GITHUB_AUTH_TOKEN.exists():
+        print(f"You must copy a github auth token to file {mvc.GITHUB_AUTH_TOKEN}")
         sys.exit(1)
-    with vsc.GITHUB_AUTH_TOKEN.open("r", encoding="utf-8") as f:
+    with mvc.GITHUB_AUTH_TOKEN.open("r", encoding="utf-8") as f:
         auth_token = f.read().strip()
         f.close()
     os.system(f'curl -H "Accept: application/vnd.github.v4.raw" \
      -H "Authorization: bearer {auth_token}" \
-     "https://raw.githubusercontent.com/Granola-Team/mina-ledger/main/mainnet/{ledger_hash}.json" > {vsc.LOCAL_DATA_DIR / ledger_hash}.json')
+     "https://raw.githubusercontent.com/Granola-Team/mina-ledger/main/mainnet/{ledger_hash}.json" > {mvc.LOCAL_DATA_DIR / ledger_hash}.json')
 
-def template_request(query: str, variables: dict = {}, endpoint: str = vsc.MINA_EXPLORER) -> dict:
+def template_request(query: str, variables: dict = {}, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Template GraphQL request
     '''
@@ -38,7 +38,7 @@ def template_request(query: str, variables: dict = {}, endpoint: str = vsc.MINA_
         print(response.text)
         raise Exception(f"Query failed -- returned code {response.status_code} with response {response.text}")
 
-def get_next_ledger_hash(epoch: int, endpoint: str = vsc.MINA_EXPLORER) -> dict:
+def get_next_ledger_hash(epoch: int, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Returns ledger hash for supplied epoch
 
@@ -60,7 +60,7 @@ def get_next_ledger_hash(epoch: int, endpoint: str = vsc.MINA_EXPLORER) -> dict:
 }"""
     return template_request(query, {"epoch": epoch}, endpoint)
 
-def get_next_staking_ledger(ledger_hash: str, endpoint: str = vsc.MINA_EXPLORER) -> dict:
+def get_next_staking_ledger(ledger_hash: str, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Return the staking ledger
 
@@ -75,7 +75,7 @@ def get_next_staking_ledger(ledger_hash: str, endpoint: str = vsc.MINA_EXPLORER)
 }"""
     return template_request(query, {"ledgerHash": ledger_hash}, endpoint)
 
-def get_block_heights(variables, endpoint: str = vsc.MINA_EXPLORER):
+def get_block_heights(variables, endpoint: str = mvc.MINA_EXPLORER):
     '''
     Returns the canonical block heights within specified parameters
 
@@ -88,7 +88,7 @@ def get_block_heights(variables, endpoint: str = vsc.MINA_EXPLORER):
 }"""
     return template_request(query, variables, endpoint)
 
-def get_payments_in_block_height(variables, endpoint: str = vsc.MINA_EXPLORER):
+def get_payments_in_block_height(variables, endpoint: str = mvc.MINA_EXPLORER):
     '''
     Returns the PAYMENT transactions in the specified block
 
@@ -109,7 +109,7 @@ def get_payments_in_block_height(variables, endpoint: str = vsc.MINA_EXPLORER):
 }"""
     return template_request(query, variables, endpoint)
 
-def get_transactions(variables, endpoint: str = vsc.MINA_EXPLORER) -> dict:
+def get_transactions(variables, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Returns transactions within specified parameters
 
@@ -134,7 +134,7 @@ def get_transactions(variables, endpoint: str = vsc.MINA_EXPLORER) -> dict:
 }"""
     return template_request(query, variables, endpoint)
 
-def get_blocks(variables, endpoint: str = vsc.MINA_EXPLORER) -> dict:
+def get_blocks(variables, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Returns blocks within specified parameters
 
