@@ -1,19 +1,26 @@
-# voting-results utils
+# voting-results
 
-## Setup
+## setup
+
+Check `python3` version >= 3.9
 
 ```sh
-# Check python3 version >= 3.9
-$ python3 --version
-
-# Clone the repo
-$ git clone git@github.com:Isaac-DeFrain/mina-utils.git
-
-# Navigate to voting-results
-$ cd mina-utils/scripts/voting-results
+python3 --version
 ```
 
-## How to calculate the results of voting
+Clone the repo
+
+```sh
+git clone git@github.com:Isaac-DeFrain/mina-utils.git
+```
+
+Navigate to `voting-results`
+
+```sh
+cd mina-utils/scripts/voting-results
+```
+
+## calculate voting results
 
 - Epoch number of voting period: `ep`
 - Need epoch `ep + 2` *staking ledger* to calculate delegations
