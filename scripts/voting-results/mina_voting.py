@@ -24,6 +24,9 @@ def download_ledger(ledger_hash: str) -> list:
         os.mkdir(mvc.LOCAL_DATA_DIR)
     print(f"Downloading ledger with hash {ledger_hash} from {endpoint}...")
     mvg.get_next_staking_ledger_granola_github(ledger_hash)
+    with data_loc(ledger_hash).open('r', encoding='utf8') as f:
+        raw_ledger_list = json.load(f)
+        f.close()
     return raw_ledger_list
 
 def filter_dict_keys(keys, dict: dict) -> dict:
@@ -91,7 +94,6 @@ def download_transactions(variables: dict, ep: int, endpoint: str) -> dict:
     print(f"Fetching blocks {block_heights[0]} - {block_heights[-1]}")
     print("This may take several minutes...")
     raw_tx_data = {}
-    # TODO async fetching
     for height in block_heights:
         raw_tx_data[height] = get_transactions_in_block(height, endpoint)
         print(f"Got block {height}")
@@ -116,7 +118,7 @@ def parse_transactions(per_block_tx_data: dict, keyword: str) -> tuple[list, int
     raw_votes = {}
     txns = []
     for block_height in per_block_tx_data.keys():
-        txns += raw_tx_data[block_height]
+        txns += per_block_tx_data[block_height]
     for tx in txns:
         num_txs += 1
         pk = tx["source"]["publicKey"]
@@ -277,6 +279,7 @@ def check(args: argparse.Namespace):
             sys.exit(1)            
 
 if __name__ == '__main__':
+    # sample_event = asyncio.get_event_loop()
     parser = argparse.ArgumentParser(description="Mina on-chain voting results calculator")
     parser.add_argument("-kw", type=str, nargs=1, help="keyword/MIP")
     parser.add_argument("-lh", type=str, nargs="*", help="ledger hash")
@@ -294,12 +297,10 @@ if __name__ == '__main__':
         "min_date_time": args.start[0],
         "max_date_time": args.end[0]
     }
-    if not args.lh:
-        ledger_hash = get_next_staking_ledger_hash(ep, endpoint)
-    else:
-        ledger_hash = get_next_staking_ledger_hash(ep, endpoint)
+    ledger_hash = get_next_staking_ledger_hash(ep, endpoint)
+    if args.lh:
         if ledger_hash != args.lh[0]:
-            print("⚠️ Mismatched next staking ledger hashes ⚠️")
+            print("⚠️ Mismatched ledger hash ⚠️")
             print(f"- provided via -lh: {args.lh[0]}")
             print(f"- downloaded: {ledger_hash}")
             sys.exit(1)
