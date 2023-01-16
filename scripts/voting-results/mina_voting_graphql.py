@@ -10,6 +10,8 @@ def pp(resp):
 def get_next_staking_ledger_granola_github(ledger_hash: str):
     '''
     Request the next staking ledger via hash from Granola's GitHub
+
+    Write to local file {mvc.LOCAL_DATA_DIR / ledger_hash}.json
     '''
     if not mvc.GITHUB_AUTH_TOKEN.exists():
         print(f"You must copy a github auth token to file {mvc.GITHUB_AUTH_TOKEN}")
@@ -17,6 +19,7 @@ def get_next_staking_ledger_granola_github(ledger_hash: str):
     with mvc.GITHUB_AUTH_TOKEN.open("r", encoding="utf-8") as f:
         auth_token = f.read().strip()
         f.close()
+    print(f"Fetching: Granola-Team/mina-ledger/main/mainnet/{ledger_hash}.json")
     os.system(f'curl -H "Accept: application/vnd.github.v4.raw" \
      -H "Authorization: bearer {auth_token}" \
      "https://raw.githubusercontent.com/Granola-Team/mina-ledger/main/mainnet/{ledger_hash}.json" > {mvc.LOCAL_DATA_DIR / ledger_hash}.json')
