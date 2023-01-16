@@ -6,3 +6,4 @@ mina_block
 voting-data
 voting_service_key.json
 voting_github_auth_token
+*mina_privkey_pass_env_var_set*
