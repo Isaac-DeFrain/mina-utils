@@ -11,26 +11,17 @@ MINA_EXPLORER = "https://graphql.minaexplorer.com"
 Mina Explorer GraphQL endpoint
 '''
 
-def local_data_dir(ep: int) -> pathlib.Path:
+def local_data(ep: int, fname: str) -> pathlib.Path:
     '''
     ./voting_data/epoch_{ep}
     '''
     return PARENT_DIR / f"voting-data/epoch_{ep}"
 
-def aggr_stake_loc(ep: int):
-    '''
-    ./voting_data/epoch_{ep}/aggregated_stake.json
-    '''
-    return local_data_dir(ep) / f"aggregated_stake.json"
+def agg_stake_loc(ep: int) -> pathlib.Path:
+    return local_data(ep, "aggregated_stake")
 
-def txns_loc(ep: int):
-    '''
-    ./voting_data/epoch_{ep}/transactions.json
-    '''
-    return local_data_dir(ep) / f"transactions.json"
+def txns_loc(ep: int) -> pathlib.Path:
+    return local_data(ep, "transactions")
 
 def ledger_loc(ep: int, ledger_hash: str) -> pathlib.Path:
-    '''
-    ./voting_data/epoch_{ep}/{ledger_hash}.json"
-    '''
-    return local_data_dir(ep) / f"{ledger_hash}.json"
+    return local_data(ep, ledger_hash)

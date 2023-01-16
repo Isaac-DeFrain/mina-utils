@@ -24,7 +24,7 @@ def download_ledger(ep: int, ledger_hash: str, endpoint: str, verbose = False) -
     '''
 
     # prep local dir
-    ldir = mvc.local_data_dir(ep)
+    ldir = mvc.ledger_loc(ep, ledger_hash)
     if not ldir.exists():
         os.mkdir(ldir)
 
@@ -101,7 +101,7 @@ def aggregate_stake(ledger: list, ep: int, verbose = False) -> dict:
             pass
 
     # write agg stake to local file
-    with mvc.aggr_stake_loc(ep).open("w", encoding="utf-8") as f:
+    with mvc.agg_stake_loc(ep).open("w", encoding="utf-8") as f:
         f.write(mvq.pp(agg_stake))
         f.close()
 
@@ -302,12 +302,12 @@ def prep_args(args, test: bool = False) -> dict[str, list]:
     ledger_list = parse_ledger(raw_ledger_list)
 
     # only aggregate stake if we haven't done so already
-    if not mvc.aggr_stake_loc(ep).exists():
+    if not mvc.agg_stake_loc(ep).exists():
         agg_stake = aggregate_stake(ledger_list, ep)
 
     else:
         # otherwise load
-        with mvc.aggr_stake_loc(ep).open("r", encoding="utf-8") as f:
+        with mvc.agg_stake_loc(ep).open("r", encoding="utf-8") as f:
             agg_stake = json.load(f)
             f.close()
 
