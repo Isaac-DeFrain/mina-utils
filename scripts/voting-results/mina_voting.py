@@ -261,6 +261,8 @@ Total stake:     %s
 Turnout:         %s
 
 Num epoch txns:  %s
+Num "vote" txns: %s
+Num delegated:   %s
 Num yes votes:   %s
 Num no votes:    %s
 
@@ -268,8 +270,8 @@ Vote data:
 %s""" % (key, "YES" if yes_weight > no_weight else "NO",
          f"{yes_stake:.14g}", f"{no_stake:.14g}",
          f"{yes_weight:.14g}", f"{no_weight:.14g}",
-         f"{total_vote_stake:.14g}", f"{total_stake:.14g}", f"{total_vote_stake / total_stake:.14g}",
-         num_txns, yes_votes, no_votes,
+         f"{total_vote_stake:.14g}", f"{total_stake:.14g}", f"{total_vote_stake / total_stake:.2%}",
+         num_txns, len(votes), len(votes) - yes_votes - no_votes, yes_votes, no_votes,
          mvq.pp(votes))
 
     if not test and args.v:

@@ -13,9 +13,11 @@ No vote weight:  0.015223520451871
 
 Vote stake:      227613505.41039
 Total stake:     994001117.83985
-Turnout:         0.22898717247425
+Turnout:         22.90%
 
 Num epoch txns:  56838
+Num "vote" txns: 251
+Num delegated:   181
 Num yes votes:   66
 Num no votes:    4
 
