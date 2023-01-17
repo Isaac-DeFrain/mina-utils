@@ -1,5 +1,7 @@
 .vscode
 __pycache__
+ledgers
+results
 secrets
 _build
 mina_block
