@@ -1,13 +1,14 @@
 import os
 import sys
 import json
+import pathlib
 import requests
 import mina_voting_constants as mvc
 
 def pp(resp):
-	return json.dumps(resp, indent=4)
+	  return json.dumps(resp, indent=4)
 
-def get_next_staking_ledger_granola_github(ep: int, ledger_hash: str):
+def get_next_staking_ledger_granola_github_auth(ep: int, ledger_hash: str, repo: str):
     '''
     ### Requires github auth token
 
@@ -18,32 +19,69 @@ def get_next_staking_ledger_granola_github(ep: int, ledger_hash: str):
     if not mvc.GITHUB_AUTH_TOKEN.exists():
         print(f"You must copy a github auth token to file {mvc.GITHUB_AUTH_TOKEN}")
         sys.exit(1)
+
     with mvc.GITHUB_AUTH_TOKEN.open("r", encoding="utf-8") as f:
         auth_token = f.read().strip()
         f.close()
+
     print(f"Fetching: Granola-Team/mina-ledger/main/mainnet/{ledger_hash}.json")
     os.system(f'curl -H "Accept: application/vnd.github.v4.raw" \
-     -H "Authorization: bearer {auth_token}" \
-     "{mvc.GRANOLA_LEDGER}/{ledger_hash}.json" > {mvc.ledger_loc(ep, ledger_hash)}')
+        -H "Authorization: bearer {auth_token}" \
+        "{mvc.LEDGER_SOURCES["granola"]}/{ledger_hash}.json" > {mvc.ledger_loc(ep, ledger_hash)}')
 
-def template_gql_request(query: str, variables: dict = {}, endpoint: str = mvc.MINA_EXPLORER) -> dict:
+def get_all_sources(ep, ledger_hash):
+    for src in mvc.LEDGER_SOURCES:
+        get_next_staking_ledger(ep, ledger_hash, src, True)
+
+def diff(fpath1: pathlib.Path, fpath2: pathlib.Path):
+    output = os.system(f'diff {fpath1} {fpath2}')
+    if output:
+        print(output)
+        sys.exit(1)
+
+def get_next_staking_ledger(ep: int, ledger_hash: str, src: str, extra = False):
+    '''
+    Get the next staking ledger via `wget`
+    '''
+    assert src in mvc.LEDGER_SOURCES
+    target = mvc.ledger_loc(ep, ledger_hash)
+
+    if extra:
+        src_dir = mvc.LEDGERS_DIR / src
+        if not src_dir.exists():
+            if not mvc.LEDGERS_DIR.exists():
+                os.mkdir(mvc.LEDGERS_DIR)
+            os.mkdir(src_dir)
+        target = src_dir / f"{ledger_hash}.json"
+
+    if src == "granola":
+        os.system(f'wget "{mvc.LEDGER_SOURCES["granola"]}/{ledger_hash}.json" -O {target}')
+
+    if src == "zkvalidator":
+        os.system(f'wget "{mvc.LEDGER_SOURCES["zkvalidator"]}/{ledger_hash}.json" -O {target}')
+
+def template_request_gql(query: str, variables: dict = {}, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Template GraphQL request
     '''
     query = " ".join(query.split())
     payload = {"query": query}
+
     if variables:
         payload = {**payload, "variables": variables}
+
     headers = {"Accept": "application/json"}
     response = requests.post(endpoint, json=payload, headers=headers)
     resp_json = response.json()
+
     if response.status_code == 200 and "errors" not in resp_json:
         return resp_json
+
     else:
         print(response.text)
         raise Exception(f"Query failed -- returned code {response.status_code} with response {response.text}")
 
-def get_next_ledger_hash(epoch: int, endpoint: str = mvc.MINA_EXPLORER) -> dict:
+def get_next_ledger_hash_gql(epoch: int, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Returns ledger hash for supplied epoch
 
@@ -63,9 +101,9 @@ def get_next_ledger_hash(epoch: int, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     }
   }
 }"""
-    return template_gql_request(query, {"epoch": epoch}, endpoint)
+    return template_request_gql(query, {"epoch": epoch}, endpoint)
 
-def get_next_staking_ledger(ledger_hash: str, endpoint: str = mvc.MINA_EXPLORER) -> dict:
+def get_next_staking_ledger_gql(ledger_hash: str, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
     Return the staking ledger
 
@@ -78,7 +116,7 @@ def get_next_staking_ledger(ledger_hash: str, endpoint: str = mvc.MINA_EXPLORER)
     delegate
   }
 }"""
-    return template_gql_request(query, {"ledgerHash": ledger_hash}, endpoint)
+    return template_request_gql(query, {"ledgerHash": ledger_hash}, endpoint)
 
 def get_block_heights(variables, endpoint: str = mvc.MINA_EXPLORER):
     '''
@@ -91,7 +129,7 @@ def get_block_heights(variables, endpoint: str = mvc.MINA_EXPLORER):
     blockHeight
   }
 }"""
-    return template_gql_request(query, variables, endpoint)
+    return template_request_gql(query, variables, endpoint)
 
 def get_payments_in_block_height(variables, endpoint: str = mvc.MINA_EXPLORER):
     '''
@@ -112,7 +150,7 @@ def get_payments_in_block_height(variables, endpoint: str = mvc.MINA_EXPLORER):
     }
   }
 }"""
-    return template_gql_request(query, variables, endpoint)
+    return template_request_gql(query, variables, endpoint)
 
 def get_transactions(variables, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
@@ -137,7 +175,7 @@ def get_transactions(variables, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     amount
   }
 }"""
-    return template_gql_request(query, variables, endpoint)
+    return template_request_gql(query, variables, endpoint)
 
 def get_blocks(variables, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
@@ -176,4 +214,4 @@ def get_blocks(variables, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     }
   }
 }"""
-    return template_gql_request(query, variables, endpoint)
+    return template_request_gql(query, variables, endpoint)

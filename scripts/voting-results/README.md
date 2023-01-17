@@ -1,5 +1,7 @@
 # voting-results
 
+[MIP1 report](./mip1_report.txt)
+
 ## Setup
 
 Check `python3` version >= 3.7
@@ -20,6 +22,11 @@ Navigate to `voting-results`
 cd mina-utils/scripts/voting-results
 ```
 
+## Default behavior
+
+- ledgers are downloaded from [Granola-Team/mina-ledger](https://github.com/Granola-Team/mina-ledger/tree/main/mainnet)
+- GraphQL queries are made to [Mina Explorer's GraphQL API](https://graphql.minaexplorer.com/)
+
 ## Examples
 
 #### `cftest-2` voting period
@@ -33,7 +40,8 @@ cd mina-utils/scripts/voting-results
 - writes report and votes to stdout
 
 ```sh
-python3 -m mina_voting -v \
+python3 -m mina_voting \
+    -v \
     -ep 43 \
     -kw "cftest-2" \
     -start 2022-12-16T15:00:00Z \
@@ -50,9 +58,11 @@ python3 -m mina_voting -v \
 - end: Jan 14, 2023 8:30 UTC
 - write report file
 - write votes file
+- pull ledgers from [Granola-Team](https://github.com/Granola-Team/mina-ledger/tree/main/mainnet) and [zkvalidator](https://github.com/zkvalidator/mina-graphql-rs/tree/main/data/epochs) and diff
 
 ```sh
 python3 -m mina_voting \
+    -diff \
     -report \
     -votes \
     -ep 44 \
