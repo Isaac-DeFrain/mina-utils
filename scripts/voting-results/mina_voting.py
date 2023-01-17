@@ -216,48 +216,69 @@ def get_account(ledger: list, pubkey: str) -> dict:
             break
     return res
 
-def display(res: dict, test: bool = False):
+def mk_csv(num_txns: int, yes_votes: int, no_votes: int, vote_stake: dict, yes_weight: float, no_weight: float) -> str:
+    return """Num_epoch_txns,Num_yes_votes,Num_no_votes,Vote_stake,Yes_vote_weight,No_vote_weight
+%s,%s,%s,%s,%s,%s 
+""" % (num_txns, yes_votes, no_votes, vote_stake, yes_weight, no_weight)
+
+def display(res: dict, test = False):
     '''
     Print results to stdout
     '''
+    rep = res['rep']
+    key = res['key'][0]
     ledger = res['ledger']
     num_txns = res['num']
     votes, yes_votes, no_votes = res['votes']
     vote_weight, yes_weight, no_weight = res['weight']
     agg_stake, total_vote_stake = res['stake']
-    
-    if not test:
-        # print report
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print("~~~ Voting Results Report ~~~")
-        print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-        print()
-        print(f"Keyword: {key[0]}")
-        print()
-        print(f">>> Totals")
-        print(f"Num epoch txns: {num_txns}")
-        print(f"Num yes votes:  {yes_votes}")
-        print(f"Num no votes:   {no_votes}")
-        print(f"Vote stake:     {total_vote_stake}")
-        print()
-        print(f">>> Weights")
-        print(f"Yes vote weight: {yes_weight}")
-        print(f"No vote weight:  {no_weight}")
-        print()
+    pp = lambda v: (v[0], {
+            "vote": memo_of_vote(v[1]),
+            "stake": weight_or_delegation(ledger, agg_stake, v[0], True),
+            "weight": weight_or_delegation(ledger, vote_weight, v[0], False)
+        })
+    votes = dict(map(pp, votes))
+    report = """
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~ Voting Results Report ~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # print raw votes if verbose
-        if args.v:
-            print(">>> Voting details")
-            print(mvq.pp(dict(map(
-                lambda v: (v[0], {
-                    "vote": memo_of_vote(v[1]),
-                    "stake": weight_or_delegation(ledger, agg_stake, v[0], True),
-                    "weight": weight_or_delegation(ledger, vote_weight, v[0], False)
-                }),
-                votes
-            ))))
+Keyword: %s
 
-def prep_args(args, test: bool = False) -> dict[str, list]:
+>>> Totals
+Num epoch txns:  %s
+Num yes votes:   %s
+Num no votes:    %s
+Vote stake:      %s
+
+>>> Weights
+Yes vote weight: %s
+No vote weight:  %s
+
+>>> Voting details
+%s
+""" % (key, num_txns, yes_votes, no_votes,
+       total_vote_stake, yes_weight, no_weight, mvq.pp(votes))
+
+    if not test and args.v:
+        print(report)
+
+    if rep:
+        keydir = mvc.RESULTS_DIR / str(key)
+        report_csv = keydir / "report.csv"
+        votes_json = keydir / "votes.json"
+
+        if not keydir.exists():
+            os.mkdir(keydir)
+
+        r = open(report_csv, "w", encoding="utf-8")
+        v = open(votes_json, "w", encoding="utf-8")
+        r.write(mk_csv(num_txns, yes_votes, no_votes, total_vote_stake, yes_weight, no_weight))
+        v.write(mvq.pp(votes))
+        r.close()
+        v.close()
+
+def prep_args(args, test = False) -> dict[str, list]:
     '''
     Prepare args for `results(ledger_list, agg_stake, votes, keyword, num_txns)`
     '''
@@ -325,7 +346,7 @@ def prep_args(args, test: bool = False) -> dict[str, list]:
     votes, num_txns = parse_transactions(raw_tx_data, keyword)
     return results(ledger_list, agg_stake, votes, keyword, num_txns)
 
-def results(ledger_list, agg_stake, votes, keyword, num_txns) -> dict[str, list]:
+def results(ledger_list, agg_stake, votes, keyword, num_txns, report = False) -> dict[str, list]:
     '''
     Returns all results `num`, `keys`, `ledger`, `stake`, `votes`, `weight`
     '''
@@ -351,13 +372,12 @@ def results(ledger_list, agg_stake, votes, keyword, num_txns) -> dict[str, list]
         except:
             pass
 
-    # tally stake-weighted votes
+    # aggregate stake-weighted votes
     for vote in votes:
         pk = vote[0]
         memo = vote[1]
 
         if pk in agg_stake.keys():
-
             # sum yes weight
             if in_favor(memo, keyword):
                 yes_votes += 1
@@ -377,6 +397,7 @@ def results(ledger_list, agg_stake, votes, keyword, num_txns) -> dict[str, list]
     return {
         'num'   : num_txns,
         'key'   : [keyword],
+        'rep'   : [report],
         'stake' : [agg_stake, total_vote_stake],
         'votes' : [votes, yes_votes, no_votes],
         'weight': [vote_weight, yes_weight, no_weight],
@@ -474,7 +495,7 @@ def check(args: argparse.Namespace):
 # main
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Mina on-chain voting results calculator")
+    parser = argparse.ArgumentParser(description="Mina on-chain voting results calculator and report generator")
     parser.add_argument("-kw", type=str, nargs=1, help="MIP keyword")
     parser.add_argument("-ep", type=int, nargs=1, help="Voting epoch number")
     parser.add_argument("-lh", type=str, nargs="*", help="Staking ledger hash")
@@ -482,6 +503,8 @@ if __name__ == '__main__':
     parser.add_argument("-end", type=str, nargs=1, help="Voting period end time (in your local timezone) - ISO-8601 YY-mm-ddTHH:MM:SSZ")
     parser.add_argument("-v",  action="store_true", help="Verbose - shows all votes with memos decoded")
     parser.add_argument("-gql", type=str, nargs="*", help=f"GraphQL endpoint (default: {mvc.MINA_EXPLORER})")
+    parser.add_argument("-report", action="store_true", help="Write report to file")
+    parser.add_argument("-votes", action="store_true", help="Write votes to file")
 
     # validate args
     args = parser.parse_args()
@@ -496,4 +519,4 @@ if __name__ == '__main__':
     ledger = res['ledger']
 
     # display results
-    display(results(list(ledger), stake[0], votes[0], key[0], num))
+    display(results(list(ledger), stake[0], votes[0], key[0], num, report=args.report))

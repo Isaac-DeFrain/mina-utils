@@ -1,6 +1,7 @@
 import pathlib
 
 PARENT_DIR = pathlib.Path(__file__).parent
+RESULTS_DIR = PARENT_DIR / "results"
 
 GITHUB_AUTH_TOKEN = PARENT_DIR / "voting_github_auth_token"
 
@@ -11,17 +12,17 @@ MINA_EXPLORER = "https://graphql.minaexplorer.com"
 Mina Explorer GraphQL endpoint
 '''
 
-def local_data(ep: int, fname: str) -> pathlib.Path:
+def on_chain_data_loc(ep: int, fname: str) -> pathlib.Path:
     '''
-    ./voting_data/epoch_{ep}
+    ./voting_data/epoch_{ep}/{fname}.json
     '''
-    return PARENT_DIR / f"voting-data/epoch_{ep}"
+    return PARENT_DIR / f"voting-data/epoch_{ep}/{fname}.json"
 
 def agg_stake_loc(ep: int) -> pathlib.Path:
-    return local_data(ep, "aggregated_stake")
+    return on_chain_data_loc(ep, "aggregated_stake")
 
 def txns_loc(ep: int) -> pathlib.Path:
-    return local_data(ep, "transactions")
+    return on_chain_data_loc(ep, "transactions")
 
 def ledger_loc(ep: int, ledger_hash: str) -> pathlib.Path:
-    return local_data(ep, ledger_hash)
+    return on_chain_data_loc(ep, ledger_hash)
