@@ -24,7 +24,7 @@ def get_next_staking_ledger_granola_github(ep: int, ledger_hash: str):
     print(f"Fetching: Granola-Team/mina-ledger/main/mainnet/{ledger_hash}.json")
     os.system(f'curl -H "Accept: application/vnd.github.v4.raw" \
      -H "Authorization: bearer {auth_token}" \
-     "{mvc.GRANOLA_LEDGER}/{ledger_hash}.json" > {mvc.local_data_dir(ep) / ledger_hash}.json')
+     "{mvc.GRANOLA_LEDGER}/{ledger_hash}.json" > {mvc.ledger_loc(ep, ledger_hash)}')
 
 def template_gql_request(query: str, variables: dict = {}, endpoint: str = mvc.MINA_EXPLORER) -> dict:
     '''
